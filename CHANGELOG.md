@@ -1,0 +1,50 @@
+# Changelog
+
+All notable changes to the **Otaku** Kodi Addon (RPDevs fork) will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased] - 2026-10-19
+
+### Fixed
+- **Premiumize Torrent Cache Checking (`hash_check`)**:
+  - Replaced query-string `GET` requests with chunked `POST` requests (`chunk_size=100`) transmitting form data `[('items[]', hash) ...]`.
+  - Fixes HTTP 414 (*Request-URI Too Long*) errors when scraping high-volume sources and checking 100+ torrent infohashes simultaneously.
+- **Premiumize Account Storage Management (`manage_storage_space`)**:
+  - Added safety checks for `storage_info` response and `'space_used'` key existence.
+  - Prevents unhandled `KeyError` and `TypeError` crashes during storage quota checks if the API returns rate limits, errors, or maintenance responses.
+- **Premiumize Torrent File Extension Validation (`resolve_single_magnet` & `resolve_uncached_source`)**:
+  - Updated `is_file_ext_valid()` check to inspect `i.get('path')` first, falling back to `i.get('link', '')`.
+  - Fixes false negatives during video filtering caused by CDN query parameters and token strings in download URLs (`.split('.')[-1]`).
+- **Premiumize Torrent Episode Matching & Branch Logic**:
+  - Fixed dead fallback branch where `elif len(filter_list) >= 1:` previously shadowed the multi-file fallback block; corrected to `elif len(filter_list) > 1:`.
+  - Added sample file filtering fallback (`'sample' not in path.lower()`) to select the main feature when regex episode matching returns no match.
+  - Handled interactive dialog cancellation: aborts playback cleanly (`return None`) when the user cancels the file selection modal (`user_select`) instead of forcing playback of the first file.
+- **Kodi Video Stream Resolver (`resolver.py`)**:
+  - **MIME Type Normalization**: Handled `application/octet-stream` responses returned by CDN nodes (CloudFront / Akamai / Cloudflare). Automatically maps `.mkv` to `video/x-matroska`, `.mp4` to `video/mp4`, `.m3u8` to `video/MP2T`, or removes `Content-Type` for other video containers so Kodi's internal FFmpeg demuxer can inspect stream magic bytes directly.
+  - **ListItem Property Guard**: Guarded `item.setProperty('MimeType', content_type)` in `_handle_playback()` to ignore `application/octet-stream`, avoiding playback failure and InputStream Adaptive conflicts on Android devices.
+
+### Infrastructure & Hardware Tuning
+- **Android TV / Low-Memory Hardware Cache Buffer**:
+  - Diagnosed `std::bad_alloc` crash in `CFileCache::Open` occurring on 32-bit ARM Android systems (e.g. onn. Streaming Device 4K Pro) when Kodi `filecache.memorysize` was configured to 1024 MB (1 GB contiguous buffer request on ~52 MB available heap).
+  - Validated stable playback by configuring `filecache.memorysize` to 64 MB.
+
+---
+
+## [5.3.4] - 2026-10-18
+
+### Fixed
+- Otaku browser: fixed Airing Last, This, and Next season tabs (season query casing for the metadata API).
+- AnimePahe: fail soft when search API returns no data; fixed invalid-JSON exception handling.
+- MegaPlay: decrypt encrypted embed sources using AES-CBC when the API no longer returns plain file URLs.
+- Settings maintenance: renamed `Instructions.txt` to `instructions.txt` for the instructions viewer.
+
+---
+
+## [5.3.3] - 2026-09-13
+
+### Fixed
+- Fixed MegaPlay extractor parsing and stream extraction.

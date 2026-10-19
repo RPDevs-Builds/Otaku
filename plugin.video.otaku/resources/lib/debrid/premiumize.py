@@ -100,10 +100,19 @@ class Premiumize:
         return r.json()['content'] if r else None
 
     def hash_check(self, hashlist):
-        params = urllib.parse.urlencode([('items[]', hash) for hash in hashlist])
-        url = f'{self.base_url}/cache/check?{params}'
-        r = client.get(url, headers=self.headers())
-        return r.json() if r else None
+        if not hashlist:
+            return None
+        all_responses = []
+        chunk_size = 100
+        for i in range(0, len(hashlist), chunk_size):
+            chunk = hashlist[i:i + chunk_size]
+            data = [('items[]', h) for h in chunk]
+            r = client.post(f'{self.base_url}/cache/check', headers=self.headers(), data=data)
+            res = r.json() if r else None
+            if not res or 'response' not in res:
+                return None
+            all_responses.extend(res['response'])
+        return {'status': 'success', 'response': all_responses}
 
     def direct_download(self, src):
         postData = {'src': src}
@@ -126,6 +135,8 @@ class Premiumize:
 
     def manage_storage_space(self):
         storage_info = self.get_storage_info()
+        if not storage_info or 'space_used' not in storage_info:
+            return
         used_space_gb = storage_info['space_used'] / (1024 ** 3)
         if used_space_gb > self.threshold:
             oldest_items = self.get_oldest_items()
@@ -172,21 +183,27 @@ class Premiumize:
             return None
         folder_details = dd_result['content']
         folder_details = sorted(folder_details, key=lambda i: int(i['size']), reverse=True)
-        folder_details = [i for i in folder_details if source_utils.is_file_ext_valid(i['link'])]
+        folder_details = [i for i in folder_details if source_utils.is_file_ext_valid(i.get('path') or i.get('link', ''))]
         filter_list = [i for i in folder_details]
 
         if pack_select:
             identified_file = source_utils.get_best_match('path', folder_details, episode, pack_select, filename)
-            stream_link = identified_file.get('link')
+            stream_link = identified_file.get('link') if identified_file else None
         elif len(filter_list) == 1:
             stream_link = filter_list[0]['link']
-        elif len(filter_list) >= 1:
+        elif len(filter_list) > 1:
             identified_file = source_utils.get_best_match('path', folder_details, episode, filename=filename)
-            stream_link = identified_file.get('link')
+            stream_link = identified_file.get('link') if identified_file else None
+            if not stream_link:
+                if identified_file and identified_file.get('path') == '' and 'link' not in identified_file:
+                    return None
+                samples_filtered = [tfile for tfile in folder_details if 'sample' not in tfile.get('path', '').lower()]
+                if samples_filtered:
+                    stream_link = samples_filtered[0]['link']
         else:
-            filter_list = [tfile for tfile in folder_details if 'sample' not in tfile['path'].lower()]
-            if len(filter_list) == 1:
-                stream_link = filter_list[0]['link']
+            samples_filtered = [tfile for tfile in folder_details if 'sample' not in tfile.get('path', '').lower()]
+            if samples_filtered:
+                stream_link = samples_filtered[0]['link']
 
         if stream_link and self.addtocloud:
             self.add_to_cloud(stream_link)
@@ -276,24 +293,29 @@ class Premiumize:
                 return None
             folder_details = dd_result['content']
             folder_details = sorted(folder_details, key=lambda i: int(i['size']), reverse=True)
-            folder_details = [i for i in folder_details if source_utils.is_file_ext_valid(i['link'])]
+            folder_details = [i for i in folder_details if source_utils.is_file_ext_valid(i.get('path') or i.get('link', ''))]
             filter_list = [i for i in folder_details]
 
             if pack_select:
                 identified_file = source_utils.get_best_match('path', folder_details, source['episode_re'], pack_select)
-                stream_link = identified_file.get('link')
-
+                stream_link = identified_file.get('link') if identified_file else None
             elif len(filter_list) == 1:
                 stream_link = filter_list[0]['link']
-
-            elif len(filter_list) >= 1:
+            elif len(filter_list) > 1:
                 identified_file = source_utils.get_best_match('path', folder_details, source['episode_re'])
-                stream_link = identified_file.get('link')
-
-            filter_list = [tfile for tfile in folder_details if 'sample' not in tfile['path'].lower()]
-
-            if len(filter_list) == 1:
-                stream_link = filter_list[0]['link']
+                stream_link = identified_file.get('link') if identified_file else None
+                if not stream_link:
+                    if identified_file and identified_file.get('path') == '' and 'link' not in identified_file:
+                        if runinforground:
+                            control.progressDialog.close()
+                        return None
+                    samples_filtered = [tfile for tfile in folder_details if 'sample' not in tfile.get('path', '').lower()]
+                    if samples_filtered:
+                        stream_link = samples_filtered[0]['link']
+            else:
+                samples_filtered = [tfile for tfile in folder_details if 'sample' not in tfile.get('path', '').lower()]
+                if samples_filtered:
+                    stream_link = samples_filtered[0]['link']
 
             if stream_link and self.addtocloud:
                 self.add_to_cloud(stream_link)

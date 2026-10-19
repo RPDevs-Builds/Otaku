@@ -225,9 +225,10 @@ class Resolver(BaseWindow):
 
         # Handle mimetype - hooks will configure InputStream Adaptive for HLS/DASH
         hdr = linkInfo.get('headers') or {}
-        if hdr.get('Content-Type'):
-            item.setProperty('MimeType', hdr['Content-Type'])
-            item = hook_mimetype.trigger(hdr['Content-Type'], item)
+        content_type = hdr.get('Content-Type')
+        if content_type and content_type != 'application/octet-stream':
+            item.setProperty('MimeType', content_type)
+            item = hook_mimetype.trigger(content_type, item)
 
         if self.params.get('image'):
             self.image = self.params.get('image', {})
@@ -391,8 +392,16 @@ class Resolver(BaseWindow):
                 resp_headers.update({'Content-Type': 'video/MP2T'})
             elif '.m3u8' in url:
                 resp_headers.update({'Content-Type': 'application/vnd.apple.mpegurl'})
-        elif resp_headers['Content-Type'] == 'application/octet-stream' and '.m3u8' in url:
-            resp_headers.update({'Content-Type': 'video/MP2T'})
+        elif resp_headers['Content-Type'] == 'application/octet-stream':
+            clean_url = url.split('?')[0].lower()
+            if clean_url.endswith('.mkv'):
+                resp_headers['Content-Type'] = 'video/x-matroska'
+            elif clean_url.endswith('.mp4'):
+                resp_headers['Content-Type'] = 'video/mp4'
+            elif '.m3u8' in clean_url:
+                resp_headers['Content-Type'] = 'video/MP2T'
+            else:
+                resp_headers.pop('Content-Type', None)
         return {
             "url": link if '|' in link else response.url,
             "headers": resp_headers,
