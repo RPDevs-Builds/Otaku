@@ -89,6 +89,7 @@ class SourceSelect(BaseWindow):
         self.display_list.reset()
         self.displayed_sources = sources  # Update the displayed sources list
         badges_enabled = control.getBool('interface.source_select.badges')
+        menu_items = []
 
         for source in sources:
             if source is None:
@@ -161,7 +162,10 @@ class SourceSelect(BaseWindow):
                 'size': source.get('size', '')
             }
             menu_item.setProperties(properties)
-            self.display_list.addItem(menu_item)
+            menu_items.append(menu_item)
+
+        if menu_items:
+            self.display_list.addItems(menu_items)
 
     def doModal(self):
         super(SourceSelect, self).doModal()

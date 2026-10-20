@@ -34,6 +34,69 @@ from resources.lib.ui import control
 #  SQL - SQLite Context Manager (WAL-mode concurrent access)
 # ═══════════════════════════════════════════════════════════════════════════
 
+_cached_pragmas = None
+_cached_pragmas_time = 0
+_PRAGMA_CACHE_TTL = 30  # re-read settings at most once every 30 seconds
+
+
+def _get_sqlite_pragmas():
+    global _cached_pragmas, _cached_pragmas_time
+    now = time.time()
+    if _cached_pragmas is not None and (now - _cached_pragmas_time) < _PRAGMA_CACHE_TTL:
+        return _cached_pragmas
+
+    cache_size_mb = 16
+    mmap_size_mb = 32
+    sync_val = 'NORMAL'
+    temp_store_ram = True
+
+    try:
+        c_mb = control.getInt('db.sqlite.cache_size_mb')
+        if c_mb > 0:
+            cache_size_mb = c_mb
+    except Exception:
+        pass
+
+    try:
+        m_mb = control.getInt('db.sqlite.mmap_size_mb')
+        if m_mb >= 0:
+            mmap_size_mb = m_mb
+    except Exception:
+        pass
+
+    try:
+        sync_mode = control.getSetting('db.sqlite.synchronous') or '1'
+        sync_map = {'0': 'OFF', '1': 'NORMAL', '2': 'FULL'}
+        sync_val = sync_map.get(str(sync_mode), 'NORMAL')
+    except Exception:
+        pass
+
+    try:
+        temp_store_ram = control.getBool('db.sqlite.temp_store_ram')
+    except Exception:
+        pass
+
+    stmts = [
+        "PRAGMA foreign_keys = ON",
+        f"PRAGMA synchronous = {sync_val}",
+        "PRAGMA journal_mode = WAL",
+        f"PRAGMA cache_size = -{cache_size_mb * 1024}",
+        f"PRAGMA mmap_size = {mmap_size_mb * 1024 * 1024}"
+    ]
+    if temp_store_ram:
+        stmts.append("PRAGMA temp_store = MEMORY")
+
+    _cached_pragmas = tuple(stmts)
+    _cached_pragmas_time = now
+    return _cached_pragmas
+
+
+def clear_pragma_cache():
+    """Clear cached PRAGMA configuration tuple to force immediate reload from settings."""
+    global _cached_pragmas, _cached_pragmas_time
+    _cached_pragmas = None
+    _cached_pragmas_time = 0
+
 
 def _dict_factory(cursor, row):
     """Row factory that returns dicts keyed by column name."""
@@ -68,44 +131,8 @@ class SQL:
             self._conn = dbapi2.connect(self.path, timeout=self.timeout, isolation_level=None)
             self._conn.row_factory = _dict_factory
 
-            # Dynamic SQLite Engine PRAGMAs (Settings -> Cache & Database)
-            cache_size_mb = 16
-            mmap_size_mb = 32
-            sync_val = 'NORMAL'
-            temp_store_ram = True
-            try:
-                c_mb = control.getInt('db.sqlite.cache_size_mb')
-                if c_mb > 0:
-                    cache_size_mb = c_mb
-            except Exception:
-                pass
-
-            try:
-                m_mb = control.getInt('db.sqlite.mmap_size_mb')
-                if m_mb >= 0:
-                    mmap_size_mb = m_mb
-            except Exception:
-                pass
-
-            try:
-                sync_mode = control.getSetting('db.sqlite.synchronous') or '1'
-                sync_map = {'0': 'OFF', '1': 'NORMAL', '2': 'FULL'}
-                sync_val = sync_map.get(str(sync_mode), 'NORMAL')
-            except Exception:
-                pass
-
-            try:
-                temp_store_ram = control.getBool('db.sqlite.temp_store_ram')
-            except Exception:
-                pass
-
-            self._conn.execute("PRAGMA foreign_keys = ON")
-            self._conn.execute(f"PRAGMA synchronous = {sync_val}")
-            self._conn.execute("PRAGMA journal_mode = WAL")
-            self._conn.execute(f"PRAGMA cache_size = -{cache_size_mb * 1024}")
-            self._conn.execute(f"PRAGMA mmap_size = {mmap_size_mb * 1024 * 1024}")
-            if temp_store_ram:
-                self._conn.execute("PRAGMA temp_store = MEMORY")
+            for pragma in _get_sqlite_pragmas():
+                self._conn.execute(pragma)
 
             self._cursor = self._conn.cursor()
             return self._cursor

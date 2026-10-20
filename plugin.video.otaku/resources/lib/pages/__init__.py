@@ -1,6 +1,5 @@
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 from resources.lib.pages import (
@@ -362,16 +361,19 @@ class Sources(GetSources):
         return sortedList
 
     def updateProgress(self):
-        qualities = [4, 3, 2, 1, 0]
-
-        def count_quality(args):
-            source_list, quality = args
-            return len([i for i in source_list if i['quality'] == quality])
-
-        with ThreadPoolExecutor(max_workers=min(control.max_threads or 1, 20)) as executor:
-            torrent_tasks = [(self.torrentSources, quality) for quality in qualities]
-            hoster_tasks = [(self.hosterSources, quality) for quality in qualities]
-            embed_tasks = [(self.embedSources, quality) for quality in qualities]
-            self.torrents_qual_len = list(executor.map(count_quality, torrent_tasks))
-            self.hosters_qual_len = list(executor.map(count_quality, hoster_tasks))
-            self.embeds_qual_len = list(executor.map(count_quality, embed_tasks))
+        t_counts, h_counts, e_counts = [0] * 5, [0] * 5, [0] * 5
+        for s in self.torrentSources:
+            q = s.get('quality', 0)
+            if 0 <= q <= 4:
+                t_counts[4 - q] += 1
+        for s in self.hosterSources:
+            q = s.get('quality', 0)
+            if 0 <= q <= 4:
+                h_counts[4 - q] += 1
+        for s in self.embedSources:
+            q = s.get('quality', 0)
+            if 0 <= q <= 4:
+                e_counts[4 - q] += 1
+        self.torrents_qual_len = t_counts
+        self.hosters_qual_len = h_counts
+        self.embeds_qual_len = e_counts

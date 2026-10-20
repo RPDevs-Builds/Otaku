@@ -16,6 +16,8 @@ Chapter Keywords           - CHAPTER_*_KEYWORDS, chapter_title_matches_intro/out
 Filter UI vocabulary       - INFO_STRUCT (codec / HDR / audio / misc tags for filter dialog)
 """
 
+import functools
+import os
 import re
 import string
 import xbmc
@@ -274,6 +276,7 @@ def getInfo(release_title):
 #  Episode Regex & Size Helpers
 # ═══════════════════════════════════════════════════════════════════════════
 
+@functools.lru_cache(maxsize=128)
 def get_cache_check_reg(episode):
     episode = str(episode)
     season = ''
@@ -732,14 +735,28 @@ def cleanTitle(title):
 #  File Utilities
 # ═══════════════════════════════════════════════════════════════════════════
 
-def is_file_ext_valid(file_name):
-    return False if '.' + file_name.split('.')[-1] not in video_ext() else True
+_VIDEO_EXTENSIONS_CACHE = None
 
 
 def video_ext():
-    COMMON_VIDEO_EXTENSIONS = xbmc.getSupportedMedia('video').split('|')
-    COMMON_VIDEO_EXTENSIONS = [i for i in COMMON_VIDEO_EXTENSIONS if i != '' and i != '.zip']
-    return COMMON_VIDEO_EXTENSIONS
+    global _VIDEO_EXTENSIONS_CACHE
+    if _VIDEO_EXTENSIONS_CACHE is None:
+        try:
+            raw = xbmc.getSupportedMedia('video').split('|')
+            _VIDEO_EXTENSIONS_CACHE = frozenset(ext.lower() for ext in raw if ext and ext != '.zip')
+        except Exception:
+            _VIDEO_EXTENSIONS_CACHE = frozenset({
+                '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.m4v', '.webm',
+                '.flv', '.vob', '.ogv', '.ts', '.m2ts', '.mts'
+            })
+    return _VIDEO_EXTENSIONS_CACHE
+
+
+def is_file_ext_valid(file_name):
+    if not file_name:
+        return False
+    ext = os.path.splitext(file_name)[1].lower()
+    return ext in video_ext()
 
 
 def user_select(files, dict_key):
