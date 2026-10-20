@@ -29,6 +29,7 @@ if control.ADDON_VERSION != control.getSetting('version'):
     control.setSetting('version', control.ADDON_VERSION)
 
 if __name__ == "__main__":
+    control.process_context()
     from resources.lib import Main  # noQA
     plugin_url = control.get_plugin_url(sys.argv[0])
     plugin_params = control.get_plugin_params(sys.argv[2])

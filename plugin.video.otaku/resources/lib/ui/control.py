@@ -379,7 +379,7 @@ def clearSettingsCache():
 # ═══════════════════════════════════════════════════════════════════════════
 
 def process_context():
-    """Cache context menu settings into window properties."""
+    """Cache context menu settings into window properties for both main and testing addons."""
     context_settings = [
         "context.otaku.findrecommendations",
         "context.otaku.findrelations",
@@ -396,11 +396,12 @@ def process_context():
     ]
     for s_id in context_settings:
         try:
-            cache_val = homeWindow.getProperty(s_id)
-            val = settings.getBool(s_id)
-            if cache_val != str(val).lower():
-                homeWindow.setProperty(s_id, str(val).lower())
-        except:
+            val_str = str(settings.getBool(s_id)).lower()
+            testing_id = s_id.replace('context.otaku', 'context.otaku.testing')
+            for prop_id in (s_id, testing_id):
+                if homeWindow.getProperty(prop_id) != val_str:
+                    homeWindow.setProperty(prop_id, val_str)
+        except Exception:
             log(f'Failed to cache context setting: {s_id}', 'error')
 
 

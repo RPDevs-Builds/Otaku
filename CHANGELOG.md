@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Wired metadata TTL resolution into `database.get()` and calendar TTL into `AnimeScheduleCalendar`.
 
 ### Fixed
+- **Context Menu Options for Testing Addon (`control.py`, `default.py`)**:
+  - Updated `process_context()` to populate both `context.otaku.*` and `context.otaku.testing.*` window properties so Source Select, Rescrape, and watchlist options appear in the context menu for both live and testing add-on instances.
+  - Added `process_context()` invocation at `default.py` entrypoint to ensure context menu window properties remain warm across navigation.
 - **Debrid Cache Maintenance & Storage Pruning (`debrid_cache.py`, `database.py`)**:
   - Integrated `debrid_cache` table dropping into `database.cache_clear()` so **Settings → General → Clear Cache** purges debrid hash records along with general cache and watchlist data.
   - Added indexed automatic TTL pruning (`DELETE FROM debrid_cache WHERE expires < now`) executed periodically on write workers to prevent unbounded SQLite file growth.
