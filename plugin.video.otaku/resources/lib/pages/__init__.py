@@ -181,7 +181,8 @@ class Sources(GetSources):
         if rescrape:
             all_sources = get_sources(*call_args)
         else:
-            all_sources = database.get(get_sources, 8, *call_args, key=cache_key)
+            torrent_ttl = control.getInt('cache.torrents.ttl') or 24
+            all_sources = database.get(get_sources, torrent_ttl, *call_args, key=cache_key)
         if all_sources is None:
             all_sources = {'cached': [], 'uncached': []}
         self.torrentUnCacheSources += all_sources['uncached']
@@ -196,7 +197,8 @@ class Sources(GetSources):
         if rescrape:
             all_sources = get_sources(*call_args)
         else:
-            all_sources = database.get(get_sources, 8, *call_args, key=cache_key)
+            scraper_ttl = control.getInt('cache.scrapers.ttl') or 8
+            all_sources = database.get(get_sources, scraper_ttl, *call_args, key=cache_key)
         if all_sources is None:
             all_sources = {'cached': [], 'uncached': []}
         if merge_mode == 'cached_only':
@@ -209,16 +211,17 @@ class Sources(GetSources):
 
     def _embed_sources_worker(self, pid, mod, cache_key, skip_prefix, needs_media_type, mal_id, episode, media_type, rescrape):
         get_sources = mod.Sources().get_sources
+        scraper_ttl = control.getInt('cache.scrapers.ttl') or 8
         if needs_media_type:
             if rescrape:
                 src = get_sources(mal_id, episode, media_type)
             else:
-                src = database.get(get_sources, 8, mal_id, episode, media_type, key=cache_key)
+                src = database.get(get_sources, scraper_ttl, mal_id, episode, media_type, key=cache_key)
         else:
             if rescrape:
                 src = get_sources(mal_id, episode)
             else:
-                src = database.get(get_sources, 8, mal_id, episode, key=cache_key)
+                src = database.get(get_sources, scraper_ttl, mal_id, episode, key=cache_key)
         self.embedSources += src
         if skip_prefix:
             self._apply_embed_skip(skip_prefix, src)

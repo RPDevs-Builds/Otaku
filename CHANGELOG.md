@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-10-19
 
+### Added
+- **Dedicated Cache Settings Menu & TTL Controls (`settings.xml`, `pages/__init__.py`, `debrid_cache.py`)**:
+  - Added dedicated **Cache** category under Addon Settings with configurable TTL sliders for scrapers (`cache.scrapers.ttl`, 1–72 hours, default 8h) and torrents/debrid (`cache.torrents.ttl`, 1–168 hours, default 24h).
+  - Added duplicated **Clear Cache** action button directly on the Cache settings page for convenient cache wiping when adjusting durations.
+
 ### Fixed
 - **Debrid Cache Maintenance & Storage Pruning (`debrid_cache.py`, `database.py`)**:
   - Integrated `debrid_cache` table dropping into `database.cache_clear()` so **Settings → General → Clear Cache** purges debrid hash records along with general cache and watchlist data.

@@ -1964,3 +1964,15 @@ msgstr ""
 msgctxt "#30486"
 msgid "AnimePahe Alt"
 msgstr ""
+
+msgctxt "#30487"
+msgid "Scrapers Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30488"
+msgid "Torrents Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30489"
+msgid "Cache Settings"
+msgstr ""
