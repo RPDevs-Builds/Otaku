@@ -983,7 +983,7 @@
 						<heading>30185</heading>
 					</control>
 				</setting>
-				<setting id="scraper.concurrency.workers" type="integer" label="30508" help="">
+				<setting id="scraper.concurrency.workers" type="integer" label="30508" help="30515">
 					<level>0</level>
 					<default>8</default>
 					<constraints>
@@ -1182,28 +1182,28 @@
 
 			<!-- Database Maintenance -->
 			<group id="3" label="30498" help="">
-				<setting id="database_stats" type="action" label="30500" help="">
+				<setting id="database_stats" type="action" label="30500" help="30517">
 					<level>0</level>
 					<data>RunPlugin(plugin://plugin.video.otaku/database_stats?setting=true)</data>
 					<control type="button" format="action">
 						<close>false</close>
 					</control>
 				</setting>
-				<setting id="vacuum_databases" type="action" label="30501" help="">
+				<setting id="vacuum_databases" type="action" label="30501" help="30518">
 					<level>0</level>
 					<data>RunPlugin(plugin://plugin.video.otaku/vacuum_databases?setting=true)</data>
 					<control type="button" format="action">
 						<close>true</close>
 					</control>
 				</setting>
-				<setting id="check_db_integrity" type="action" label="30502" help="">
+				<setting id="check_db_integrity" type="action" label="30502" help="30519">
 					<level>0</level>
 					<data>RunPlugin(plugin://plugin.video.otaku/check_db_integrity?setting=true)</data>
 					<control type="button" format="action">
 						<close>false</close>
 					</control>
 				</setting>
-				<setting id="sync_mappings" type="action" label="30503" help="">
+				<setting id="sync_mappings" type="action" label="30503" help="30520">
 					<level>0</level>
 					<data>RunPlugin(plugin://plugin.video.otaku/sync_mappings?setting=true)</data>
 					<control type="button" format="action">
@@ -1220,8 +1220,8 @@
 			</group>
 
 			<!-- Advanced SQLite Engine PRAGMAs -->
-			<group id="4" label="30499" help="">
-				<setting id="db.sqlite.cache_size_mb" type="integer" label="30504" help="">
+			<group id="4" label="30499" help="30510">
+				<setting id="db.sqlite.cache_size_mb" type="integer" label="30504" help="30511">
 					<level>1</level>
 					<default>16</default>
 					<constraints>
@@ -1233,7 +1233,7 @@
 						<popup>false</popup>
 					</control>
 				</setting>
-				<setting id="db.sqlite.mmap_size_mb" type="integer" label="30505" help="">
+				<setting id="db.sqlite.mmap_size_mb" type="integer" label="30505" help="30512">
 					<level>1</level>
 					<default>32</default>
 					<constraints>
@@ -1245,7 +1245,7 @@
 						<popup>false</popup>
 					</control>
 				</setting>
-				<setting id="db.sqlite.synchronous" type="string" label="30506" help="">
+				<setting id="db.sqlite.synchronous" type="string" label="30506" help="30513">
 					<level>1</level>
 					<default>1</default>
 					<constraints>
@@ -1257,7 +1257,7 @@
 					</constraints>
 					<control type="spinner" format="string"/>
 				</setting>
-				<setting id="db.sqlite.temp_store_ram" type="boolean" label="30507" help="">
+				<setting id="db.sqlite.temp_store_ram" type="boolean" label="30507" help="30514">
 					<level>1</level>
 					<default>true</default>
 					<control type="toggle"/>
@@ -1299,7 +1299,7 @@
 					</dependencies>
 					<control type="spinner" format="string"/>
 				</setting>
-				<setting id="interface.source_select.badges" type="boolean" label="30509" help="">
+				<setting id="interface.source_select.badges" type="boolean" label="30509" help="30516">
 					<level>0</level>
 					<default>true</default>
 					<control type="toggle"/>

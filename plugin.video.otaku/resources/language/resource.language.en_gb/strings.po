@@ -2056,3 +2056,47 @@ msgstr ""
 msgctxt "#30509"
 msgid "Enhanced Source Badges (Color-coded)"
 msgstr ""
+
+msgctxt "#30510"
+msgid "Configure low-level SQLite database engine parameters for memory caching, I/O speed, and crash resilience."
+msgstr ""
+
+msgctxt "#30511"
+msgid "Amount of RAM allocated for SQLite page caching. Higher values accelerate queries on large databases (Default: 16 MB)."
+msgstr ""
+
+msgctxt "#30512"
+msgid "Maximum memory-mapped I/O size. Lower limits (16-32 MB) prevent memory pressure and crashes on low-RAM devices (Default: 32 MB)."
+msgstr ""
+
+msgctxt "#30513"
+msgid "Disk synchronization mode. NORMAL provides full crash-resilience in WAL mode with maximum write speed (Default: NORMAL)."
+msgstr ""
+
+msgctxt "#30514"
+msgid "Keeps SQLite temporary sorting tables and indices in RAM instead of writing temporary files to disk storage (Default: Enabled)."
+msgstr ""
+
+msgctxt "#30515"
+msgid "Maximum concurrent background worker threads for scraping sources and building directory listings (Default: 8)."
+msgstr ""
+
+msgctxt "#30516"
+msgid "Display color-coded quality, debrid provider, audio, and codec badges on sources in the selection dialog (Default: Enabled)."
+msgstr ""
+
+msgctxt "#30517"
+msgid "Inspect database sizes, cached item counts, indexed records, and SQLite engine parameters."
+msgstr ""
+
+msgctxt "#30518"
+msgid "Defragments database files, rebuilds internal indexes, and reclaims freed storage space."
+msgstr ""
+
+msgctxt "#30519"
+msgid "Scans all SQLite database files for corruption, missing pages, or indexing errors."
+msgstr ""
+
+msgctxt "#30520"
+msgid "Downloads the latest anime cross-platform ID mappings database from GitHub."
+msgstr ""
