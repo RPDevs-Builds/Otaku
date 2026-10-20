@@ -14,7 +14,7 @@ class SimklWLF(WatchlistFlavorBase):
     _IMAGE = "simkl.png"
 
     api_info = database.get_info('Simkl')
-    client_id = api_info['client_id']
+    client_id = api_info['client_id'] if api_info else ''
 
     def __headers(self):
         headers = {
@@ -153,8 +153,36 @@ class SimklWLF(WatchlistFlavorBase):
         import pickle
         items = [pickle.loads(item['data']) for item in cached_items]
 
+        # Apply sorting to raw items directly in memory (instant for thousands of items)
+        if int(self.sort) == 0:  # anime_title
+            items.sort(key=lambda x: (x.get('show', {}).get('title') or '').lower())
+        elif int(self.sort) == 1:    # user_rating (integer 1-10, or None)
+            items.sort(key=lambda x: x.get('user_rating') or 0, reverse=True)
+        elif int(self.sort) == 2:    # progress (watched / total)
+            items.sort(key=lambda x: (x.get('watched_episodes_count') or 0) / (x.get('total_episodes_count') or 1), reverse=True)
+        elif int(self.sort) == 3:    # last_watched (ISO 8601 timestamp)
+            items.sort(key=lambda x: x.get('last_watched_at') or '', reverse=True)
+        elif int(self.sort) == 4:    # last_added (ISO 8601 timestamp)
+            items.sort(key=lambda x: x.get('added_to_watchlist_at') or '', reverse=True)
+
+        if int(self.order) == 1:
+            items.reverse()
+
+        total_count = len(items)
+
+        # Slice to page BEFORE heavy metadata enrichment and view generation
+        if paging_enabled and per_page > 0:
+            page_items = items[offset:offset + per_page]
+            has_next = (offset + per_page) < total_count
+        else:
+            page_items = items
+            has_next = False
+
+        if not page_items:
+            return []
+
         # Fetch AniList data for current page items only (fast for small batches)
-        mal_ids = [anime['show']['ids']['mal'] for anime in items if anime['show']['ids'].get('mal')]
+        mal_ids = [anime['show']['ids']['mal'] for anime in page_items if anime.get('show', {}).get('ids', {}).get('mal')]
         mal_id_dicts = [{'mal_id': mid} for mid in mal_ids]
         get_meta.collect_meta(mal_id_dicts)
 
@@ -169,35 +197,16 @@ class SimklWLF(WatchlistFlavorBase):
 
         # Pass AniList data to view functions
         def viewfunc(res):
-            mal_id = str(res['show']['ids'].get('mal'))
+            mal_id = str(res.get('show', {}).get('ids', {}).get('mal', ''))
             anilist_item = anilist_by_mal_id.get(mal_id)
             return self._base_watchlist_status_view(res, anilist_res=anilist_item)
 
-        all_results = list(filter(None, map(viewfunc, items)))
+        results = list(filter(None, map(viewfunc, page_items)))
 
-        # Apply sorting
-        if int(self.sort) == 0:  # anime_title
-            all_results = sorted(all_results, key=lambda x: x['info']['title'].lower() if x['info'].get('title') else '')
-        elif int(self.sort) == 1:    # user_rating (integer 1-10, or None)
-            all_results = sorted(all_results, key=lambda x: x['info'].get('user_rating') or 0, reverse=True)
-        elif int(self.sort) == 2:    # progress (watched / total)
-            all_results = sorted(all_results, key=lambda x: (x['info'].get('watched_episodes_count') or 0) / (x['info'].get('total_episodes_count') or 1), reverse=True)
-        elif int(self.sort) == 3:    # last_watched (ISO 8601 timestamp)
-            all_results = sorted(all_results, key=lambda x: x['info'].get('last_watched') or "", reverse=True)
-        elif int(self.sort) == 4:    # last_added (ISO 8601 timestamp)
-            all_results = sorted(all_results, key=lambda x: x['info'].get('last_added') or "", reverse=True)
+        if has_next:
+            results += self.handle_paging(has_next, f'watchlist_status_type_pages/simkl/{status}/{offset + per_page}', page)
 
-        if int(self.order) == 1:
-            all_results.reverse()
-
-        # Slice to page AFTER sorting
-        if paging_enabled and per_page > 0:
-            total_count = len(all_results)
-            all_results = all_results[offset:offset + per_page]
-            has_next = (offset + per_page) < total_count
-            all_results += self.handle_paging(has_next, f'watchlist_status_type_pages/simkl/{status}/{offset + per_page}', page)
-
-        return all_results
+        return results
 
     def _get_next_up_episodes(self, status, offset, page):
         """
@@ -617,8 +626,10 @@ class SimklWLF(WatchlistFlavorBase):
         r = client.post(f'{self._URL}/sync/add-to-list', headers=self.__headers(), json_data=data)
         if r:
             r = r.json()
-            if not r['not_found']['shows'] or not r['not_found']['shows']:
-                clear_watchlist_cache(self._NAME)  # Clear all statuses since item moved
+            if not r['not_found']['shows']:
+                clear_watchlist_cache(self._NAME, 'watching')
+                clear_watchlist_cache(self._NAME, 'next_up')
+                clear_watchlist_cache(self._NAME, status)
                 if status == 'completed' and r.get('added', {}).get('shows', [{}])[0].get('to') == 'watching':
                     return 'watching'
                 return True
@@ -638,7 +649,8 @@ class SimklWLF(WatchlistFlavorBase):
         if r:
             r = r.json()
             if not r['not_found']['shows'] or not r['not_found']['movies']:
-                clear_watchlist_cache(self._NAME)  # Clear cache to reflect progress
+                clear_watchlist_cache(self._NAME, 'watching')
+                clear_watchlist_cache(self._NAME, 'next_up')
                 return True
         return False
 

@@ -833,7 +833,8 @@ class KitsuWLF(WatchlistFlavorBase):
             }
             r = client.post(f'{self._URL}/edge/library-entries', headers=self.__headers(), json_data=data)
             if r and r.ok:
-                clear_watchlist_cache(self._NAME)  # Clear cache to reflect progress
+                clear_watchlist_cache(self._NAME, 'current')
+                clear_watchlist_cache(self._NAME, 'next_up')
             return r and r.ok
 
         animeid = int(r['data'][0]['id'])
@@ -850,7 +851,8 @@ class KitsuWLF(WatchlistFlavorBase):
         }
         r = client.patch(f'{self._URL}/edge/library-entries/{animeid}', headers=self.__headers(), json_data=data)
         if r and r.ok:
-            clear_watchlist_cache(self._NAME)  # Clear cache to reflect progress
+            clear_watchlist_cache(self._NAME, 'current')
+            clear_watchlist_cache(self._NAME, 'next_up')
         return r and r.ok
 
     def update_score(self, mal_id, score):

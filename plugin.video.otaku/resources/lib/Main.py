@@ -24,6 +24,7 @@ import json
 import ast
 import sys
 import random
+import time
 
 from resources.lib import MetaBrowser
 from resources.lib.ui import control, database, utils
@@ -412,8 +413,8 @@ def add_watch_history(items):
     return items
 
 
-def save_to_watch_history(mal_id):
-    """Save an anime to watch history"""
+def save_to_watch_history(mal_id, episode=None, total_episodes=None):
+    """Save an anime to watch history with episode and timestamp tracking"""
     # if not control.getBool("interface.show_watch_history"):
     #     return
 
@@ -424,6 +425,13 @@ def save_to_watch_history(mal_id):
                 history_data = json.load(f)
         else:
             history_data = {'history': []}
+
+        # Find existing entry to preserve fields if needed
+        existing_entry = None
+        for h in history_data.get('history', []):
+            if str(h.get('UniqueIDs', {}).get('mal_id')) == str(mal_id):
+                existing_entry = h
+                break
 
         # Get anime metadata
         anime_data = database.get_show(mal_id)
@@ -437,6 +445,9 @@ def save_to_watch_history(mal_id):
         art = {}
         if show_meta and show_meta.get('art'):
             art = pickle.loads(show_meta['art'])
+
+        eps_count = int(total_episodes) if total_episodes else kodi_meta.get('episodes', 0)
+        watched_ep = int(episode) if episode is not None else (existing_entry.get('last_watched_episode') if existing_entry else None)
 
         # Create history entry with the same info as add_last_watched
         history_entry = {
@@ -458,7 +469,9 @@ def save_to_watch_history(mal_id):
             'trailer': kodi_meta.get('trailer', ''),
             'year': kodi_meta.get('year', ''),
             'premiered': kodi_meta.get('premiered', ''),
-            'episodes': kodi_meta.get('episodes', 0),
+            'episodes': eps_count,
+            'last_watched_episode': watched_ep,
+            'last_watched_at': int(time.time()),
             # Artwork - use art dict from shows_meta, fallback to kodi_meta
             'poster': art.get('poster') or kodi_meta.get('poster', ''),
             'tvshow.poster': art.get('poster') or kodi_meta.get('poster', ''),
@@ -476,6 +489,9 @@ def save_to_watch_history(mal_id):
 
         # Add new entry at the beginning
         history_data['history'].insert(0, history_entry)
+
+        # Cap history to 100 entries to maintain instant loading
+        history_data['history'] = history_data['history'][:100]
 
         # Save back to file
         with open(control.watch_history_json, 'w', encoding='utf-8') as f:
@@ -628,7 +644,7 @@ def ANIME_STATISTICS(payload, params):
 
 @Route('watch_history/')
 def WATCH_HISTORY(payload, params):
-    """Display watch history"""
+    """Display watch history as an instant springboard into recently watched anime."""
     try:
         if not control.pathExists(control.watch_history_json):
             control.draw_items([], 'tvshows')
@@ -643,29 +659,41 @@ def WATCH_HISTORY(payload, params):
                 # Get the mal_id from the correct location
                 mal_id = entry['UniqueIDs']['mal_id']
 
-                # Format title
+                # Format title and badges
                 title = entry.get('title', '')
+                episodes = entry.get('episodes', 0)
+                last_ep = entry.get('last_watched_episode')
+
+                display_title = title
+                if last_ep is not None:
+                    if episodes and episodes > 1:
+                        display_title = f"{title} [COLOR dodgerblue]Ep {last_ep}/{episodes}[/COLOR]"
+                    else:
+                        display_title = f"{title} [COLOR dodgerblue]Ep {last_ep}[/COLOR]"
+
+                plot = entry.get('plot', '')
+                if last_ep is not None:
+                    ep_str = f"Episode {last_ep}" + (f" of {episodes}" if episodes and episodes > 1 else "")
+                    plot = f"[B]Last Watched:[/B] {ep_str}\n\n{plot}"
 
                 info = {
                     'UniqueIDs': entry.get('UniqueIDs', {}),
-                    'title': entry.get('title', ''),
-                    'plot': entry.get('plot', ''),
+                    'title': display_title,
+                    'plot': plot,
                     'mpaa': entry.get('mpaa', ''),
                     'duration': entry.get('duration', 0),
                     'genre': entry.get('genre', []),
                     'studio': entry.get('studio', []),
                     'status': entry.get('status', ''),
-                    'mediatype': 'tvshow',  # Default to tvshow
+                    'mediatype': 'movie' if episodes == 1 else 'tvshow',
                     'rating': entry.get('rating', {}),
                     'cast': entry.get('cast', []),
                     'country': entry.get('country', []),
                     'trailer': entry.get('trailer', ''),
                     'year': entry.get('year', ''),
                     'premiered': entry.get('premiered', ''),
-                    'episodes': entry.get('episodes', 0),
+                    'episodes': episodes,
                 }
-
-                # Build the base item like MalBrowser does
 
                 # Handle fanart (may be a list)
                 fanart = entry.get('fanart', '')
@@ -679,14 +707,39 @@ def WATCH_HISTORY(payload, params):
                 if not banner:
                     banner = entry.get('poster', '')
 
+                # Context menu & springboard URLs
+                cm = []
+                if episodes == 1:
+                    base_url = f'play_movie/{mal_id}/'
+                    is_folder = False
+                    is_playable = True
+                    cm.append(('Play Movie', f'PlayMedia(plugin://{control.ADDON_ID}/play_movie/{mal_id}/)'))
+                else:
+                    is_folder = True
+                    is_playable = False
+                    if last_ep is not None:
+                        base_url = f'watchlist_to_ep/{mal_id}/{last_ep}'
+                        next_ep = (last_ep + 1) if (not episodes or last_ep < episodes) else last_ep
+                        cm.append((f'Play Next Episode (Ep {next_ep})', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/{next_ep})'))
+                        cm.append((f'Resume Episode {last_ep}', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/{last_ep})'))
+                    else:
+                        base_url = f'animes/{mal_id}/'
+                        cm.append(('Play Episode 1', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/1)'))
+
+                    target_ep = last_ep if last_ep else 1
+                    cm.append(('Browse Episodes', f'Container.Update(plugin://{control.ADDON_ID}/watchlist_to_ep/{mal_id}/{target_ep})'))
+
+                cm.append(('Remove from Watch History', f'RunPlugin(plugin://{control.ADDON_ID}/remove_watch_history/{mal_id})'))
+
                 base = {
-                    'name': title,
-                    'url': f'animes/{mal_id}/',
+                    'name': display_title,
+                    'url': base_url,
                     'image': entry.get('poster', ''),
                     'poster': entry.get('poster', ''),
                     'fanart': fanart,
                     'banner': banner,
-                    'info': info
+                    'info': info,
+                    'cm': cm
                 }
 
                 if entry.get('thumb'):
@@ -699,17 +752,9 @@ def WATCH_HISTORY(payload, params):
                     clearlogo = entry['clearlogo']
                     base['clearlogo'] = random.choice(clearlogo) if isinstance(clearlogo, list) else clearlogo
 
-                # Simple movie detection: if episodes == 1, treat as movie
-                episodes = entry.get('episodes', 0)
-
-                if episodes == 1:
-                    base['url'] = f'play_movie/{mal_id}/'
-                    base['info']['mediatype'] = 'movie'
-                    parsed_item = utils.parse_view(base, False, True, False)  # dub = False for now
-                else:
-                    parsed_item = utils.parse_view(base, True, False, False)   # dub = False for now
-
-                history_items.append(parsed_item)
+                parsed_item = utils.parse_view(base, is_folder, is_playable, False)
+                if parsed_item:
+                    history_items.append(parsed_item)
 
             except Exception as e:
                 control.log(f"Error processing history entry: {str(e)}", "error")
@@ -1913,6 +1958,25 @@ def CLEAR_WATCH_HISTORY(payload, params):
     control.refresh()
     if not silent:
         control.notify(f'{control.ADDON_NAME}: Watch History', 'Watch History Successfully Cleared', sound=False)
+
+
+@Route('remove_watch_history/*')
+def REMOVE_WATCH_HISTORY(payload, params):
+    mal_id = payload
+    try:
+        if control.pathExists(control.watch_history_json):
+            with open(control.watch_history_json, 'r', encoding='utf-8') as f:
+                history_data = json.load(f)
+            history_data['history'] = [
+                h for h in history_data.get('history', [])
+                if str(h.get('UniqueIDs', {}).get('mal_id')) != str(mal_id)
+            ]
+            with open(control.watch_history_json, 'w', encoding='utf-8') as f:
+                json.dump(history_data, f, ensure_ascii=False, indent=2)
+            control.refresh()
+            control.notify(f'{control.ADDON_NAME}: Watch History', 'Removed from Watch History', sound=False)
+    except Exception as e:
+        control.log(f"Error removing from watch history: {str(e)}", "error")
 
 
 @Route('clear_selected_fanart')

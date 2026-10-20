@@ -218,6 +218,10 @@ class WatchlistPlayer(player):
                     any_completed = False
                 self.updated = True
 
+                # Update watch history upon reaching watched milestone
+                from resources.lib import Main
+                Main.save_to_watch_history(self.mal_id, self.episode, len(self.episodes) if self.episodes else None)
+
                 # Pre-scrape next episode in background for zero-wait binge playback
                 self._trigger_next_episode_prescrape()
 
@@ -317,13 +321,14 @@ class WatchlistPlayer(player):
         if previous_last_watched != current_mal_id:
             control.setSetting('addon.last_watched', current_mal_id)
             control.log(f'Last watched changed from {previous_last_watched} to {current_mal_id}')
-            # Add to watch history
-            from resources.lib import Main
-            Main.save_to_watch_history(self.mal_id)
             # Defer refresh to avoid blocking playback
             control.setGlobalProp('otaku.menu.needs_refresh', 'true')
         else:
             control.log(f'Last watched unchanged ({current_mal_id}) - skipping updates')
+
+        # Always save/update watch history with episode & total episodes info
+        from resources.lib import Main
+        Main.save_to_watch_history(self.mal_id, self.episode, len(self.episodes) if self.episodes else None)
 
         # Continue with audio/subtitle setup which is needed immediately
         if self.type not in ['embed', 'direct']:

@@ -249,7 +249,6 @@ class AniListWLF(WatchlistFlavorBase):
 
         # Deserialize cached items
         entries = [pickle.loads(item['data']) for item in cached_items]
-        get_meta.collect_meta(entries)
 
         # If sorting by title, sort manually alphabetically.
         if int(self.sort) == 0:
@@ -263,18 +262,28 @@ class AniListWLF(WatchlistFlavorBase):
         if int(self.order) == 1:
             entries.reverse()
 
-        # Map to views
-        all_results = list(map(self.base_watchlist_status_view, entries))
-        all_results = [r for r in all_results if r is not None]
+        total_count = len(entries)
 
-        # Slice to page AFTER sorting
+        # Slice to page BEFORE metadata collection and view generation
         if paging_enabled and per_page > 0:
-            total_count = len(all_results)
-            all_results = all_results[offset:offset + per_page]
+            page_entries = entries[offset:offset + per_page]
             has_next = (offset + per_page) < total_count
-            all_results += self.handle_paging(has_next, f'watchlist_status_type_pages/anilist/{status}/{offset + per_page}', page)
+        else:
+            page_entries = entries
+            has_next = False
 
-        return all_results
+        if not page_entries:
+            return []
+
+        # Only collect metadata and build views for current page items
+        get_meta.collect_meta(page_entries)
+        results = list(map(self.base_watchlist_status_view, page_entries))
+        results = [r for r in results if r is not None]
+
+        if has_next:
+            results += self.handle_paging(has_next, f'watchlist_status_type_pages/anilist/{status}/{offset + per_page}', page)
+
+        return results
 
     def _get_next_up_episodes(self, query, variables, status, offset, page):
         """
@@ -715,7 +724,8 @@ class AniListWLF(WatchlistFlavorBase):
 
         r = client.post(self._URL, headers=self.__headers(), json_data={'query': query, 'variables': variables})
         if r and r.ok:
-            clear_watchlist_cache(self._NAME)  # Clear cache to reflect progress
+            clear_watchlist_cache(self._NAME, 'CURRENT')
+            clear_watchlist_cache(self._NAME, 'next_up')
         return r and r.ok
 
     def update_score(self, mal_id, score):
