@@ -704,9 +704,11 @@ def xbmc_add_dir(name, url, art, info, draw_cm, bulk_add, isfolder, isplayable, 
     # If clearlogo is already a string (pre-selected), use it directly
     # No need for random.choice() since get_meta.py pre-selects it
     if isplayable:
-        art['tvshow.poster'] = art.pop('poster')
+        if 'poster' in art and art['poster']:
+            art['tvshow.poster'] = art.pop('poster')
         liz.setProperties({'Video': 'true', 'IsPlayable': 'true'})
-    liz.setArt(art)
+    clean_art = {k: str(v) for k, v in art.items() if v and isinstance(v, str)}
+    liz.setArt(clean_art)
     return u, liz, isfolder if bulk_add else xbmcplugin.addDirectoryItem(HANDLE, u, liz, isfolder)
 
 
