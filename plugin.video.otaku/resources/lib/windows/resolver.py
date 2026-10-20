@@ -63,6 +63,7 @@ class Resolver(BaseWindow):
         self.silent = actionArgs.get('silent')
         self.params = actionArgs.get('params', {})
         self.abort = False
+        self._handle_resolved = False
 
         # if self.season:
         #     control.setStr('resolve_season', str(self.season))
@@ -121,8 +122,8 @@ class Resolver(BaseWindow):
         return sources
 
     def resolve(self, sources):
-        """Optimized resolve with reduced property updates and sequential stream failover"""
-        for i in sources:
+        """Optimized resolve with sequential stream failover and smart retry"""
+        for idx, i in enumerate(sources):
             self.return_data['source'] = i
             if self.canceled:
                 break
@@ -156,34 +157,48 @@ class Resolver(BaseWindow):
                     'headers': {}
                 }
                 self.return_data['link'] = stream_link
-                break
 
             if stream_link:
                 self.return_data['link'] = stream_link
-                try:
-                    verified_linkinfo = self.prefetch_play_link(stream_link)
-                except Exception as e:
-                    control.log(f"Resolver: prefetch error for {i.get('provider')}: {e}", level='warning')
-                    verified_linkinfo = None
+                if not self.return_data.get('linkinfo'):
+                    try:
+                        verified_linkinfo = self.prefetch_play_link(stream_link)
+                    except Exception as e:
+                        control.log(f"Resolver: prefetch error for {i.get('provider')}: {e}", level='warning')
+                        verified_linkinfo = None
 
-                if verified_linkinfo:
-                    self.return_data['linkinfo'] = verified_linkinfo
-                    if i.get('subs'):
-                        self.return_data['sub'] = i['subs']
-                    break
+                    if verified_linkinfo:
+                        self.return_data['linkinfo'] = verified_linkinfo
+                        if i.get('subs'):
+                            self.return_data['sub'] = i['subs']
+
+                if self.return_data.get('linkinfo'):
+                    if self.play:
+                        ffprobe_chapters.attach_to_linkinfo(self.return_data['linkinfo'])
+                        if self._handle_playback():
+                            return
+                        elif control.getBool('general.autotrynext') and not self.canceled and (idx + 1 < len(sources)):
+                            control.notify(control.ADDON_NAME, "Playback failed on source, trying next candidate...", time=3000, sound=False)
+                            self.return_data = {'linkinfo': None, 'sub': None, 'source': None}
+                            continue
+                        else:
+                            break
+                    else:
+                        ffprobe_chapters.attach_to_linkinfo(self.return_data['linkinfo'])
+                        break
                 else:
                     control.log(f"Resolver: candidate {i.get('provider')} failed prefetch/verification, advancing to next candidate", level='warning')
                     self.return_data['link'] = None
 
-        if self.return_data.get('linkinfo'):
-            ffprobe_chapters.attach_to_linkinfo(self.return_data['linkinfo'])
-        else:
+        if not self.return_data.get('linkinfo'):
             self.return_data = False
+            if not self._handle_resolved and not self.context:
+                try:
+                    xbmcplugin.setResolvedUrl(control.HANDLE, False, xbmcgui.ListItem())
+                except Exception:
+                    pass
 
-        if self.play and isinstance(self.return_data, dict):
-            self._handle_playback()
-        else:
-            self.close()
+        self.close()
 
     def _update_source_properties(self, source):
         """Batch update source properties to reduce overhead"""
@@ -254,41 +269,40 @@ class Resolver(BaseWindow):
         # playlist (build_playlist added items after the first episode started).
         in_playlist = control.playList.size() > 1
 
-        if self.context or (is_widget and not in_playlist):
-            # control.print("Playlist-based playback for widget or context menu")
-            # Playlist-based playback for:
-            #   1. Context menu (RunPlugin) — no valid plugin HANDLE
-            #   2. Widget / TMDB first-play — ensures metadata displays in
-            #      player OSD (not needed for auto-next; playlist is already
-            #      populated by build_playlist at that point).
+        if self._handle_resolved or self.context or (is_widget and not in_playlist):
             control.playList.clear()
             control.playList.add(stream_url, item)
             xbmc.Player().play(control.playList, item)
         else:
-            # control.print("Standard resolved URL playback for in-addon and playlist auto-next")
-            # Standard resolved URL playback for in-addon and playlist
-            # auto-next.  setResolvedUrl satisfies Kodi's plugin HANDLE,
-            # preventing "Playback Failed" errors that pile up during
-            # playlist episode transitions.
-            xbmcplugin.setResolvedUrl(control.HANDLE, True, item)
+            try:
+                xbmcplugin.setResolvedUrl(control.HANDLE, True, item)
+                self._handle_resolved = True
+            except Exception as e:
+                control.log(f"Resolver: setResolvedUrl error ({e}), falling back to Player().play", level='warning')
+                control.playList.clear()
+                control.playList.add(stream_url, item)
+                xbmc.Player().play(control.playList, item)
 
         # Monitor playback start
         monitor = Monitor()
+        playback_ok = False
         for _ in range(30):
-            if monitor.waitForAbort(1) or monitor.playbackerror or monitor.abortRequested():
-                xbmcplugin.setResolvedUrl(control.HANDLE, False, item)
-                control.playList.clear()
+            if monitor.waitForAbort(1) or monitor.abortRequested():
                 self.abort = True
                 break
+            if monitor.playbackerror:
+                control.log(f"Resolver: playback error on {self.return_data.get('source', {}).get('provider')}", level='warning')
+                control.playList.clear()
+                break
             if monitor.playing:
+                playback_ok = True
                 break
         else:
             control.log('no xbmc playing source found; Continuing code', level='warning')
         del monitor
 
-        self.close()
-
-        if not self.abort:
+        if playback_ok:
+            self.close()
             link_info = self.return_data.get('linkinfo') or {}
             ch = link_info.get('chapters') if isinstance(link_info, dict) else None
             player.WatchlistPlayer().handle_player(
@@ -302,6 +316,19 @@ class Resolver(BaseWindow):
                 self.context,
                 ch,
             )
+            return True
+
+        if self.abort:
+            self.close()
+            if not self._handle_resolved and not self.context:
+                try:
+                    xbmcplugin.setResolvedUrl(control.HANDLE, False, item)
+                except Exception:
+                    pass
+            control.playList.clear()
+            return False
+
+        return False
 
     def _build_art_dict(self, use_params=False):
         """Build art dictionary efficiently"""

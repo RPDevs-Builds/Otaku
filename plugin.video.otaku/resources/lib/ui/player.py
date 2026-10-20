@@ -11,6 +11,7 @@ Monitor          - Playback error detection with grace period
 """
 
 import time
+import threading
 import xbmc
 import xbmcgui
 import pickle
@@ -43,6 +44,7 @@ class WatchlistPlayer(player):
         self.update_percent = control.getInt('watchlist.update.percent')
         self.resume = None
         self.path = ''
+        self._prescraped = False
         self.context = False
         self._monitor = None
         self._skip_processed = False
@@ -174,16 +176,19 @@ class WatchlistPlayer(player):
         return (self.current_time / self.total_time) * 100 if self.total_time != 0 else 0
 
     def onWatchedPercent(self):
-        if not self._watchlist_update:
-            return
-
         while self.isPlaying() and not self.updated:
             self.current_time = self.getTime()
             watched_percentage = (self.current_time / self.total_time) * 100 if self.total_time != 0 else 0
 
             if watched_percentage > self.update_percent:
-                any_completed = self._watchlist_update(self.mal_id, self.episode)
+                if self._watchlist_update:
+                    any_completed = self._watchlist_update(self.mal_id, self.episode)
+                else:
+                    any_completed = False
                 self.updated = True
+
+                # Pre-scrape next episode in background for zero-wait binge playback
+                self._trigger_next_episode_prescrape()
 
                 # Sync completed watchlists if any flavor was auto-completed
                 if any_completed:
@@ -191,6 +196,41 @@ class WatchlistPlayer(player):
                     service.sync_watchlist(True)
                 break
             xbmc.sleep(10000)  # Check every 10 seconds instead of 5
+
+    def _trigger_next_episode_prescrape(self):
+        """Pre-scrape next episode in background so binge-watching launches instantly with 0-wait cached sources."""
+        if getattr(self, '_prescraped', False):
+            return
+        if getattr(self, 'media_type', None) == 'movie' or not getattr(self, 'episodes', None):
+            return
+        try:
+            current_ep = int(self.episode)
+        except (ValueError, TypeError):
+            return
+
+        if current_ep >= len(self.episodes):
+            return
+
+        # Only pre-scrape if smartplay is enabled or playlist contains upcoming episodes
+        if not (control.getBool('general.smartplay') or playList.size() > 1):
+            return
+
+        self._prescraped = True
+        next_ep = current_ep + 1
+        mal_id = self.mal_id
+
+        def _worker():
+            try:
+                control.log(f"Pre-scraping next episode (mal_id={mal_id}, ep={next_ep}) in background...", level='info')
+                from resources.lib import MetaBrowser
+                MetaBrowser.get_sources(mal_id, next_ep, 'show', rescrape=False, source_select=False, silent=True)
+                control.log(f"Pre-scraping next episode (mal_id={mal_id}, ep={next_ep}) completed and cached.", level='info')
+            except Exception as e:
+                control.log(f"Pre-scraping ep {next_ep} error: {e}", level='warning')
+
+        t = threading.Thread(target=_worker)
+        t.daemon = True
+        t.start()
 
     def keepAlive(self):
         # Monitor the Playback with optimized wait
@@ -326,7 +366,10 @@ class WatchlistPlayer(player):
 
         # Proceed if: playnext is enabled OR outro auto-skip is enabled
         if not (playnext_time > 0 or self.skipoutro_aniskip_auto):
+            self._trigger_next_episode_prescrape()
             return
+
+        self._trigger_next_episode_prescrape()
 
         while self.isPlaying():
             self.current_time = int(self.getTime())
@@ -484,20 +527,16 @@ class WatchlistPlayer(player):
 
             # Enable and Disable Subtitles based on audio streams
             if len(audio_streams) == 1:
-                if "jpn" not in audio_streams:
-                    if control.getBool('general.dubsubtitles'):
-                        if preferred_subtitle_lang == "none":
-                            self.showSubtitles(False)
-                        else:
-                            self.showSubtitles(True)
-                    else:
-                        self.showSubtitles(False)
-
-                if "eng" not in audio_streams:
-                    if preferred_subtitle_lang == "none":
-                        self.showSubtitles(False)
-                    else:
+                audio_langs = [s.get('language', '').lower() for s in audio_streams]
+                if "jpn" in audio_langs:
+                    self.showSubtitles(preferred_subtitle_lang != "none")
+                elif "eng" in audio_langs:
+                    if control.getBool('general.dubsubtitles') and preferred_subtitle_lang != "none":
                         self.showSubtitles(True)
+                    else:
+                        self.showSubtitles(False)
+                else:
+                    self.showSubtitles(preferred_subtitle_lang != "none")
 
             if len(audio_streams) > 1:
                 if preferred_audio_streams == "eng":

@@ -140,7 +140,7 @@ class SQL:
 # ═══════════════════════════════════════════════════════════════════════════
 
 _window = xbmcgui.Window(10000)
-_MEM_PREFIX = 'otaku_test_'
+_MEM_PREFIX = f"{control.ADDON_ID}_mem_"
 
 
 def _mem_get(key):
@@ -197,6 +197,10 @@ def _init_cache_table():
     _ensure_table(
         control.cacheFile, 'cache_ix_key',
         'CREATE UNIQUE INDEX IF NOT EXISTS ix_cache ON cache (key)'
+    )
+    _ensure_table(
+        control.cacheFile, 'cache_ix_date',
+        'CREATE INDEX IF NOT EXISTS ix_cache_date ON cache (date)'
     )
 
 

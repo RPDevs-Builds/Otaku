@@ -154,7 +154,7 @@ class Sources(GetSources):
                     control.colorstr(self.torrents_qual_len[3] + self.hosters_qual_len[3] + self.embeds_qual_len[3]),
                     control.colorstr(self.torrents_qual_len[4] + self.hosters_qual_len[4] + self.embeds_qual_len[4])
                 ))
-            control.sleep(500)
+            control.sleep(100)
 
             if (
                 self.canceled
