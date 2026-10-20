@@ -184,22 +184,21 @@ class WatchlistFlavor:
             database.update_kodi_meta(mal_id, kodi_meta)
 
         flavors = WatchlistFlavor.get_all_update_flavors()
-        any_completed = False
+        if not flavors:
+            return False
 
-        for flavor in flavors:
+        def _update_single_flavor(flavor):
+            completed = False
             try:
                 updated = flavor.update_num_episodes(mal_id, episode)
                 if not updated:
                     control.log(f'Failed to update episode {episode} on {flavor.flavor_name} (returned False)', 'warning')
-                    continue
+                    return False
                 control.log(f'Updated episode {episode} on {flavor.flavor_name}')
 
                 # Per-flavor completion detection using each service's own total episode count
                 entry = flavor.get_watchlist_anime_entry(mal_id)
                 total = entry.get('total_episodes') if entry else None
-
-                # DEBUG: Log what each API returns for total_episodes
-                # control.print(f'[DEBUG] {flavor.flavor_name}: API total_episodes={total}, kodi_meta fallback={kodi_episodes}, entry={entry}')
 
                 if total is None:
                     total = kodi_episodes  # Fallback to kodi_meta
@@ -207,7 +206,7 @@ class WatchlistFlavor:
                 if total and int(episode) >= int(total) and finished_airing:
                     mapped = WatchlistFlavor._STATUS_MAP['completed'].get(flavor.flavor_name, 'completed')
                     flavor.update_list_status(mal_id, mapped)
-                    any_completed = True
+                    completed = True
                     control.log(f'Auto-completed {flavor.flavor_name} (ep {episode}/{total})')
                 else:
                     mapped = WatchlistFlavor._STATUS_MAP['watching'].get(flavor.flavor_name, 'watching')
@@ -216,8 +215,15 @@ class WatchlistFlavor:
 
             except Exception as e:
                 control.log(f'Failed to update on {flavor.flavor_name}: {e}', 'warning')
+            return completed
 
-        return any_completed
+        if len(flavors) == 1:
+            return _update_single_flavor(flavors[0])
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(len(flavors), 4)) as executor:
+            results = list(executor.map(_update_single_flavor, flavors))
+        return any(results)
 
     @staticmethod
     def watchlist_set_all_status(mal_id, status):

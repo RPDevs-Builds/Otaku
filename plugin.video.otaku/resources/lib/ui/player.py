@@ -118,8 +118,9 @@ class WatchlistPlayer(player):
     def onPlayBackStopped(self):
         control.closeAllDialogs()
         playList.clear()
-        if self.context and self.path:
-            if 10 < self.getWatchedPercent() < 90:
+        if self.path:
+            pct = self.getWatchedPercent()
+            if 10 < pct < 90:
                 query = {
                     'jsonrpc': '2.0',
                     'method': 'Files.SetFileDetails',
@@ -134,9 +135,39 @@ class WatchlistPlayer(player):
                     'id': 1
                 }
                 control.jsonrpc(query)
+            elif pct >= 90:
+                query = {
+                    'jsonrpc': '2.0',
+                    'method': 'Files.SetFileDetails',
+                    'params': {
+                        'file': self.path,
+                        'media': 'video',
+                        'resume': {
+                            'position': 0,
+                            'total': self.total_time
+                        }
+                    },
+                    'id': 1
+                }
+                control.jsonrpc(query)
 
     def onPlayBackEnded(self):
         control.closeAllDialogs()
+        if self.path:
+            query = {
+                'jsonrpc': '2.0',
+                'method': 'Files.SetFileDetails',
+                'params': {
+                    'file': self.path,
+                    'media': 'video',
+                    'resume': {
+                        'position': 0,
+                        'total': self.total_time
+                    }
+                },
+                'id': 1
+            }
+            control.jsonrpc(query)
 
     def onPlayBackError(self):
         control.closeAllDialogs()
@@ -404,7 +435,7 @@ class WatchlistPlayer(player):
                     PlayerDialogs().display_dialog(False, 0)
                 break
 
-            xbmc.sleep(5000)  # Check every 5 seconds
+            xbmc.sleep(1000)  # Check every second
 
     def _should_show_dialog(self, time_remaining, playnext_time):
         """Determine if we should show a dialog - simplified"""
@@ -465,19 +496,20 @@ class WatchlistPlayer(player):
             preffeded_subtitle_keyword = keywords[self.preferred_subtitle_keyword]
 
             # Set preferred audio stream
-            for stream in audio_streams:
-                if stream['language'] == preferred_audio_streams:
-                    self.setAudioStream(stream['index'])
-                    break
-            else:
-                # If no preferred audio stream is found, set to the default audio stream
+            if audio_streams:
                 for stream in audio_streams:
-                    if stream.get('isdefault', False):
+                    if stream.get('language') == preferred_audio_streams:
                         self.setAudioStream(stream['index'])
                         break
                 else:
-                    # If no default audio stream is found, set to the first available audio stream
-                    self.setAudioStream(audio_streams[0]['index'])
+                    # If no preferred audio stream is found, set to the default audio stream
+                    for stream in audio_streams:
+                        if stream.get('isdefault', False):
+                            self.setAudioStream(stream['index'])
+                            break
+                    else:
+                        # If no default audio stream is found, set to the first available audio stream
+                        self.setAudioStream(audio_streams[0]['index'])
 
             # Set preferred subtitle stream
             subtitle_int = None
@@ -524,18 +556,19 @@ class WatchlistPlayer(player):
                         subtitle_int = index
                         break
 
-            if subtitle_int is None:
-                # default-subtitle fallback
-                for index, sub in enumerate(subtitle_streams):
-                    if sub.get('isdefault', False):
-                        subtitle_int = index
-                        break
-                else:
-                    # If no default subtitle stream is found, set to the first available subtitle stream
-                    subtitle_int = 0
+            if subtitle_streams:
+                if subtitle_int is None:
+                    # default-subtitle fallback
+                    for index, sub in enumerate(subtitle_streams):
+                        if sub.get('isdefault', False):
+                            subtitle_int = index
+                            break
+                    else:
+                        # If no default subtitle stream is found, set to the first available subtitle stream
+                        subtitle_int = 0
 
-            if subtitle_int is not None:
-                self.setSubtitleStream(subtitle_int)
+                if subtitle_int is not None:
+                    self.setSubtitleStream(subtitle_int)
 
             # Enable and Disable Subtitles based on audio streams
             if len(audio_streams) == 1:

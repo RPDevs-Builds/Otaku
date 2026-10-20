@@ -1,4 +1,10 @@
 Changelog v5.3.4 (2026-10-18):
+- Remote Control: Fixed physical Select/Enter button responsiveness on Skip Intro and Playing Next dialogs
+- Playback: Saved resume bookmarks across normal playback and SmartPlay; reset to 0 upon completion
+- Player: Dropped outro dialog polling sleep from 5s to 1s for immediate synchronization with AniSkip
+- Service: Added 30-minute perpetual token auto-refresh loop and uncoupled service monitor from cache setting
+- Watchlist: Parallelized multi-watchlist progress updates across services via concurrent thread pool
+- Player: Added boundary index guards on empty audio and subtitle streams to prevent playback crashes
 - SmartPlay: Season pack continuity caching with instant fast-path playback for subsequent episodes without rescraping
 - SmartPlay: Multi-tier scoring engine prioritizing matching quality, release group, and embed provider continuity
 - SmartPlay: Pre-scraping optimization checking season pack coverage to eliminate redundant background scraper execution

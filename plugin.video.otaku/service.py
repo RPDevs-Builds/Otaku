@@ -336,5 +336,12 @@ if __name__ == "__main__":
     # Prefetch airing calendar in background thread (non-blocking)
     threading.Thread(target=prefetch_calendar, daemon=True).start()
     control.log('##################  MAINTENANCE COMPLETE ######################')
-    if control.getBool('general.kodi.cache'):
-        Monitor().waitForAbort()
+    monitor = Monitor()
+    while not monitor.abortRequested():
+        # Check every 30 minutes (1800s) to keep OAuth & Debrid tokens perpetually fresh
+        if monitor.waitForAbort(1800):
+            break
+        try:
+            refresh_apis()
+        except Exception as e:
+            control.log(f"Periodic token refresh error: {e}", 'warning')
