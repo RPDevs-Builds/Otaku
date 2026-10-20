@@ -176,19 +176,52 @@ class SourceSelect(BaseWindow):
         # For now, you can just log the action_id
         control.log(f"Action handled: {action_id}")
 
-    def onClick(self, controlId):
-        if controlId == 15:  # cycle views
-            sequence = ['both', 'cached', 'uncached', 'embeds']
+    def cycle_view(self, target_mode=None):
+        sequence = ['both', 'cached', 'uncached', 'embeds']
+        if target_mode and target_mode in sequence:
+            self.view_mode = target_mode
+        else:
             idx = sequence.index(self.view_mode)
             self.view_mode = sequence[(idx + 1) % len(sequence)]
 
-            # rebuild the four lists and refresh
-            cached = [s for s in self.sources if s.get('cached') is True]
-            uncached = [s for s in self.sources if s.get('cached') is False]
-            embeds = [s for s in self.sources if s.get('type') in ('embed', 'direct')]
-            both = list(self.sources)
-            self._show_current_sources(cached, both, uncached, embeds)
+        # rebuild the four lists and refresh
+        cached = [s for s in self.sources if s.get('cached') is True]
+        uncached = [s for s in self.sources if s.get('cached') is False]
+        embeds = [s for s in self.sources if s.get('type') in ('embed', 'direct')]
+        both = list(self.sources)
+        self._show_current_sources(cached, both, uncached, embeds)
 
+    def show_source_details(self, source):
+        if not source:
+            return
+        title = source.get('release_title') or source.get('name') or 'Unknown Title'
+        debrid = source.get('debrid_provider') or 'None'
+        provider = source.get('provider') or 'Unknown'
+        source_type = source.get('type', 'Unknown').capitalize()
+        quality_map = {0: '4K / 2160p', 1: '1080p', 2: '720p', 3: '480p / SD'}
+        quality = quality_map.get(source.get('quality'), str(source.get('quality', 'Unknown')))
+        size = source.get('size') or 'Unknown'
+        seeders = str(source.get('seeders', 'N/A')) if source.get('seeders', -1) != -1 else 'N/A'
+        cached_status = "Yes (Instant Debrid Stream)" if source.get('cached') is True else ("No" if source.get('cached') is False else "N/A")
+        info_tags = " | ".join(source.get('info', [])) if source.get('info') else 'None'
+        lang_val = source.get('lang', 'Unknown')
+        lang_map = {0: 'Multi-Audio', 1: 'Dual-Audio', 2: 'Subbed (Japanese)', 3: 'Dubbed (English)'}
+        audio_flavor = lang_map.get(lang_val, str(lang_val))
+
+        details = (
+            f"[B]Release:[/B] {title}\n\n"
+            f"[B]Debrid Provider:[/B] {debrid} (Cached: {cached_status})\n"
+            f"[B]Scraper / Provider:[/B] {provider} ({source_type})\n"
+            f"[B]Resolution:[/B] {quality}\n"
+            f"[B]Size:[/B] {size}  |  [B]Seeders:[/B] {seeders}\n"
+            f"[B]Audio:[/B] {audio_flavor}\n"
+            f"[B]Tags / Codecs:[/B] {info_tags}"
+        )
+        control.ok_dialog("Source Details", details)
+
+    def onClick(self, controlId):
+        if controlId == 15:  # cycle views button
+            self.cycle_view()
         elif controlId == 1000:
             pass
 
@@ -206,20 +239,48 @@ class SourceSelect(BaseWindow):
             self.resolve_item()
 
         if actionID in [117, 101, 11]:  # Context menu (117) or remote long-press Select/Menu (101, 11)
+            self.position = self.display_list.getSelectedPosition()
+            if self.position < 0 or self.position >= len(self.displayed_sources):
+                return
+
+            view_names = {'both': 'All Sources', 'cached': 'Cached Only', 'uncached': 'Uncached Only', 'embeds': 'Embeds Only'}
+            current_view_label = view_names.get(self.view_mode, self.view_mode.capitalize())
+
             context = control.context_menu(
                 [
                     "Play",
-                    "Download",
-                    "File Select"
+                    "File Select",
+                    "Source Details",
+                    f"Filter Sources (Current: {current_view_label})",
+                    "Download"
                 ]
             )
-            self.position = self.display_list.getSelectedPosition()
             if context == 0:  # Play
                 self.resolve_item()
-            elif context == 1:  # Download
-                if self.displayed_sources[self.position]['debrid_provider'] == 'Local-Debrid' or self.displayed_sources[self.position]['debrid_provider'] == '':
+            elif context == 1:  # File Selection
+                if not self.displayed_sources[self.position].get('debrid_provider'):
                     control.notify(control.ADDON_NAME, "Please Select A Debrid File")
-                elif self.displayed_sources[self.position]['debrid_provider'] == 'EasyDebrid':
+                else:
+                    self.resolve_item(True)
+            elif context == 2:  # Source Details / Inspector
+                self.show_source_details(self.displayed_sources[self.position])
+            elif context == 3:  # Filter Sources
+                filter_choice = control.context_menu(
+                    [
+                        "All Sources",
+                        "Cached Only",
+                        "Uncached Only",
+                        "Embeds Only"
+                    ]
+                )
+                modes = ['both', 'cached', 'uncached', 'embeds']
+                if 0 <= filter_choice < len(modes):
+                    self.cycle_view(modes[filter_choice])
+                    self.setFocusId(1000)
+            elif context == 4:  # Download
+                if self.displayed_sources[self.position].get('debrid_provider') in ('Local-Debrid', '', None):
+                    control.notify(control.ADDON_NAME, "Please Select A Debrid File")
+                elif self.displayed_sources[self.position].get('debrid_provider') == 'EasyDebrid':
                     control.notify(control.ADDON_NAME, "EasyDebrid does not support Downloads")
                 else:
                     self.close()
@@ -231,12 +292,6 @@ class SourceSelect(BaseWindow):
                         return_data = Resolver('resolver.xml', control.ADDON_PATH, actionArgs=self.actionArgs, source_select=True).doModal(source, {}, False)
                     if isinstance(return_data, dict):
                         Manager().download_file(return_data['link'])
-
-            elif context == 2:  # File Selection
-                if not self.displayed_sources[self.position]['debrid_provider']:
-                    control.notify(control.ADDON_NAME, "Please Select A Debrid File")
-                else:
-                    self.resolve_item(True)
 
     def resolve_item(self, pack_select=False):
         if control.getBool('general.autotrynext') and not pack_select:

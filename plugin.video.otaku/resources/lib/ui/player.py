@@ -366,11 +366,10 @@ class WatchlistPlayer(player):
             self.setup_audio_and_subtitles()
 
         # Handle different media types
-        if self.episodes:
-            # Handle playlist building if needed
-            if self.media_type == 'episode' and playList.size() == 1:
-                self.build_playlist()
+        if self.episodes and self.media_type == 'episode' and playList.size() == 1:
+            self.build_playlist()
 
+        if self.episodes:
             # Wait for embed / AniSkip / AnimeSkip, then ffprobe chapters as last fallback
             timeout = 30
             while not self._skip_processed and timeout > 0:
@@ -378,25 +377,100 @@ class WatchlistPlayer(player):
                 timeout -= 1
             self.process_ffprobe_chapter_skips()
 
-            # Handle skip intro functionality
-            self._handle_skip_intro()
-
-            # Handle watchlist updates for episodes
-            self.onWatchedPercent()
-
-            # Handle outro/playing next functionality
-            self._handle_outro_and_playing_next()
-        else:
-            self.onWatchedPercent()
-
-        # Optimized playback monitoring with longer sleep intervals
-        while self.isPlaying():
-            self.current_time = int(self.getTime())
-            xbmc.sleep(10000)  # Reduced frequency from 5s to 10s
+        # Run unified, seek-resilient playback loop (intro, watch scrobbling, binge/outro)
+        self._monitor_playback_loop()
 
         # Cleanup
         if self._monitor:
             del self._monitor
+
+    def _monitor_playback_loop(self):
+        """
+        Unified, seek-resilient playback loop handling intro skip, watched milestones,
+        and outro / zero-click binge transitions within a single responsive tick.
+        """
+        intro_enabled = bool(self.episodes and (control.getBool('smartplay.skipintrodialog') or self.skipintro_aniskip_auto))
+        intro_start = self.skipintro_start if self.skipintro_aniskip else (control.getInt('skipintro.delay') or 1)
+        intro_end = self.skipintro_end if self.skipintro_aniskip else (intro_start + (control.getInt('skipintro.duration') * 60))
+        intro_handled = not intro_enabled
+
+        playnext_enabled = control.getBool('smartplay.playingnextdialog') if self.episodes else False
+        playnext_time = control.getInt('playingnext.time') if playnext_enabled else 0
+        binge_mode = control.getBool('smartplay.binge_mode') and playnext_enabled
+        outro_handled = not (self.episodes and (playnext_time > 0 or self.skipoutro_aniskip_auto or self.skipoutro_aniskip))
+
+        while self.isPlaying():
+            try:
+                self.current_time = int(self.getTime())
+            except Exception:
+                break
+
+            time_remaining = self.total_time - self.current_time
+            watched_pct = (self.current_time / self.total_time) * 100 if self.total_time > 0 else 0
+
+            # 1. Watched milestone check (seek-resilient)
+            if not self.updated and watched_pct >= self.update_percent:
+                self.updated = True
+                any_completed = self._watchlist_update(self.mal_id, self.episode) if self._watchlist_update else False
+                from resources.lib import Main
+                Main.save_to_watch_history(self.mal_id, self.episode, len(self.episodes) if self.episodes else None)
+                self._trigger_next_episode_prescrape()
+                if any_completed:
+                    xbmc.sleep(3000)
+                    service.sync_watchlist(True)
+
+            # Trigger background pre-scrape early if approaching outro
+            if not getattr(self, '_prescraped', False) and (watched_pct >= self.update_percent or (playnext_time > 0 and time_remaining <= (playnext_time + 30))):
+                self._trigger_next_episode_prescrape()
+
+            # 2. Skip Intro check
+            if not intro_handled:
+                if self.current_time > intro_end:
+                    intro_handled = True
+                elif self.current_time >= intro_start:
+                    intro_handled = True
+                    if self.skipintro_aniskip_auto and self.skipintro_aniskip:
+                        self.seekTime(intro_end)
+                        control.log(f'Auto-skipped intro: {intro_start}-{intro_end}')
+                    else:
+                        PlayerDialogs().show_skip_intro(self.skipintro_aniskip, intro_end)
+
+            # 3. Outro & Binge / Playing Next check
+            if not outro_handled:
+                is_outro = False
+                if self.skipoutro_aniskip and self.skipoutro_start > 0 and self.current_time >= self.skipoutro_start:
+                    is_outro = True
+                elif not self.skipoutro_aniskip and playnext_time > 0 and time_remaining <= playnext_time:
+                    is_outro = True
+
+                if is_outro:
+                    outro_handled = True
+                    # Zero-Click Binge Mode: smooth advance if next episode is in playlist
+                    if binge_mode and playList.size() > 1 and playList.getposition() < (playList.size() - 1):
+                        control.notify(control.ADDON_NAME, "Binge Mode: Playing Next Episode...", time=2500)
+                        if not self.updated:
+                            self.updated = True
+                            if self._watchlist_update:
+                                self._watchlist_update(self.mal_id, self.episode)
+                            from resources.lib import Main
+                            Main.save_to_watch_history(self.mal_id, self.episode, len(self.episodes) if self.episodes else None)
+                        self.seekTime(max(0, self.total_time - 0.5))
+                        break
+                    elif self.skipoutro_aniskip_auto and self.skipoutro_aniskip:
+                        if self.skipoutro_end > 0:
+                            self.seekTime(self.skipoutro_end)
+                            control.log(f'Auto-skipped outro: {self.skipoutro_start}-{self.skipoutro_end}')
+                        break
+                    else:
+                        if self.skipoutro_aniskip and not self.skipoutro_aniskip_auto:
+                            PlayerDialogs().display_dialog(True, self.skipoutro_end)
+                        elif not self.skipoutro_aniskip and playnext_time > 0:
+                            PlayerDialogs().display_dialog(False, 0)
+                        break
+
+            # Fast polling (500ms) during intro or near outro/milestone; 1000ms otherwise
+            poll_interval = 500 if (not intro_handled or (not outro_handled and time_remaining <= (playnext_time + 15))) else 1000
+            xbmc.sleep(poll_interval)
 
     # ── Skip Intro / Outro / Playing Next ──────────────────────────────
 

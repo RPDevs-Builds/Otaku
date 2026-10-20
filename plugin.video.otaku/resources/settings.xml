@@ -65,7 +65,7 @@
 				</setting>
 				<setting id="general.smart.scroll.enable" type="boolean" label="30101" help="">
 					<level>0</level>
-					<default>false</default>
+					<default>true</default>
 					<control type="toggle"/>
 				</setting>
 				<setting id="interface.watchlist.data" type="boolean" label="30112" help="">
@@ -1597,6 +1597,14 @@
 					<level>0</level>
 					<default>true</default>
 					<control type="toggle"/>
+				</setting>
+				<setting id="smartplay.binge_mode" type="boolean" label="30534" help="30535">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="enable" setting="smartplay.playingnextdialog">true</dependency>
+					</dependencies>
 				</setting>
 				<setting id="skipoutro.aniskip.enable" type="boolean" label="30189" help="">
 					<level>0</level>

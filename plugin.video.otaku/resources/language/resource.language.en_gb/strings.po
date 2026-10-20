@@ -2152,3 +2152,35 @@ msgstr ""
 msgctxt "#30533"
 msgid "Resume / Replay Episode"
 msgstr ""
+
+msgctxt "#30534"
+msgid "Zero-Click Binge Mode"
+msgstr ""
+
+msgctxt "#30535"
+msgid "Automatically transition to the next episode at the outro without displaying the interactive countdown dialog."
+msgstr ""
+
+msgctxt "#30536"
+msgid "Source Details"
+msgstr ""
+
+msgctxt "#30537"
+msgid "Filter Sources"
+msgstr ""
+
+msgctxt "#30538"
+msgid "All Sources"
+msgstr ""
+
+msgctxt "#30539"
+msgid "Cached Only"
+msgstr ""
+
+msgctxt "#30540"
+msgid "Uncached Only"
+msgstr ""
+
+msgctxt "#30541"
+msgid "Embeds Only"
+msgstr ""

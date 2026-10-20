@@ -785,7 +785,7 @@ def draw_items(video_data, content_type=''):
                 num_watched = int(xbmc.getInfoLabel("Container.TotalWatched"))
                 total_ep = int(xbmc.getInfoLabel('Container.NumItems'))
                 all_items = int(xbmc.getInfoLabel('Container.NumAllItems'))
-            except ValueError:
+            except (ValueError, TypeError):
                 xbmc.sleep(80)
                 continue
             if all_items <= 0:
@@ -795,6 +795,7 @@ def draw_items(video_data, content_type=''):
             target_index = num_watched + offset
             if not (0 < target_index < all_items):
                 break
+            log(f"Smart scroll: focusing target_index={target_index} (watched={num_watched}, total={total_ep})")
             xbmc.executebuiltin('Action(firstpage)')
             xbmc.sleep(50)
             xbmc.executebuiltin(f'Control.SetFocus({active_id}, {target_index})')
