@@ -379,7 +379,7 @@ def request(
                 req = urllib.request.Request(url, post)
                 req.add_header('Content-Type', 'application/json')
             else:
-                if isinstance(post, dict):
+                if isinstance(post, (dict, list, tuple)):
                     post = byteify(post)
                     post = urllib.parse.urlencode(post)
                 if len(post) > 0:
@@ -897,7 +897,7 @@ def _basic_request(url, headers=None, post=None, timeout=60, jpost=False, limit=
                 request = urllib.request.Request(url, post)
                 request.add_header('Content-Type', 'application/json')
             else:
-                if isinstance(post, dict):
+                if isinstance(post, (dict, list, tuple)):
                     post = byteify(post)
                     post = urllib.parse.urlencode(post)
                 if len(post) > 0:
