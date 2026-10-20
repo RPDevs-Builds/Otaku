@@ -1185,3 +1185,108 @@ def remove_search(table, value):
         control.notify(
             control.ADDON_NAME,
             f"Search item not found: '{norm}'", time=3000)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Scraper Health & Latency Telemetry
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _init_scraper_metrics_table():
+    _ensure_table(
+        control.cacheFile, 'scraper_metrics',
+        'CREATE TABLE IF NOT EXISTS scraper_metrics '
+        '(provider TEXT, duration_ms INTEGER, sources_count INTEGER, success INTEGER, date INTEGER)'
+    )
+    _ensure_table(
+        control.cacheFile, 'scraper_metrics_ix',
+        'CREATE INDEX IF NOT EXISTS ix_scraper_metrics_provider ON scraper_metrics (provider)'
+    )
+
+
+def record_scraper_metric(provider, duration_ms, sources_count, success=True):
+    """Record execution latency and yield for a scraper worker."""
+    try:
+        _init_scraper_metrics_table()
+        now = int(time.time())
+        succ_int = 1 if success else 0
+        with SQL(control.cacheFile) as cursor:
+            cursor.execute(
+                "INSERT INTO scraper_metrics (provider, duration_ms, sources_count, success, date) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (str(provider), int(duration_ms), int(sources_count), succ_int, now)
+            )
+            cursor.connection.commit()
+    except Exception as e:
+        control.log(f"Error recording scraper metric: {e}", "warning")
+
+
+def get_scraper_metrics():
+    """Retrieve aggregated performance metrics for all scrapers."""
+    try:
+        _init_scraper_metrics_table()
+        with SQL(control.cacheFile) as cursor:
+            cursor.execute(
+                "SELECT provider, COUNT(*) as runs, AVG(duration_ms) as avg_latency, "
+                "MIN(duration_ms) as min_latency, MAX(duration_ms) as max_latency, "
+                "SUM(sources_count) as total_sources, AVG(sources_count) as avg_sources, "
+                "SUM(success) * 100.0 / COUNT(*) as success_rate "
+                "FROM scraper_metrics "
+                "GROUP BY provider "
+                "ORDER BY avg_latency ASC"
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    'provider': r['provider'],
+                    'runs': r['runs'],
+                    'avg_latency': round(r['avg_latency'], 1) if r.get('avg_latency') else 0,
+                    'min_latency': r.get('min_latency') or 0,
+                    'max_latency': r.get('max_latency') or 0,
+                    'total_sources': r.get('total_sources') or 0,
+                    'avg_sources': round(r['avg_sources'], 1) if r.get('avg_sources') else 0,
+                    'success_rate': round(r['success_rate'], 1) if r.get('success_rate') else 0
+                }
+                for r in rows
+            ]
+    except Exception as e:
+        control.log(f"Error reading scraper metrics: {e}", "warning")
+        return []
+
+
+def clear_scraper_metrics():
+    """Wipe recorded scraper metrics."""
+    try:
+        with SQL(control.cacheFile) as cursor:
+            cursor.execute("DROP TABLE IF EXISTS scraper_metrics")
+            cursor.connection.commit()
+        _tables_ready.discard(f"{control.cacheFile}:scraper_metrics")
+        _tables_ready.discard(f"{control.cacheFile}:scraper_metrics_ix")
+    except Exception as e:
+        control.log(f"Error clearing scraper metrics: {e}", "warning")
+
+
+def get_scraper_metrics_report():
+    """Format a human-readable telemetry report for the Kodi text viewer."""
+    metrics = get_scraper_metrics()
+    if not metrics:
+        return "No scraper metrics recorded yet.\n\nTelemetry is collected automatically each time you search or scrape for episodes."
+
+    lines = [
+        "═════════════════════════════════════════════════════════════════",
+        "         OTAKU SCRAPER HEALTH & LATENCY DASHBOARD",
+        "═════════════════════════════════════════════════════════════════",
+        f"{'PROVIDER':<16} {'AVG':>8} {'MIN/MAX':>12} {'SUCCESS':>9} {'SOURCES':>9} {'RUNS':>6}",
+        "─────────────────────────────────────────────────────────────────"
+    ]
+    for m in metrics:
+        p_name = m['provider'][:15]
+        avg_str = f"{int(m['avg_latency'])}ms"
+        min_max = f"{m['min_latency']}/{m['max_latency']}ms"
+        succ_str = f"{int(m['success_rate'])}%"
+        sources_str = f"{m['total_sources']} ({m['avg_sources']}/r)"
+        lines.append(f"{p_name:<16} {avg_str:>8} {min_max:>12} {succ_str:>9} {sources_str:>9} {m['runs']:>6}")
+
+    lines.append("═════════════════════════════════════════════════════════════════")
+    lines.append(f"Total Scrapers Monitored: {len(metrics)}")
+    lines.append("\nTip: Disable scrapers with 0% success or >5000ms latency in Settings → Scrapers.")
+    return "\n".join(lines)

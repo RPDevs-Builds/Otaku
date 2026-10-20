@@ -175,6 +175,9 @@ class Sources(GetSources):
         return self.return_data
 
     def _torrent_sources_worker(self, provider, query, mal_id, episode, status, media_type, rescrape, season, part):
+        t0 = time.perf_counter()
+        count = 0
+        success = False
         try:
             mod, cache_key = _TORRENT_MODULES[provider]
             sources_obj = mod.Sources()
@@ -185,16 +188,25 @@ class Sources(GetSources):
             all_sources = database.get(get_sources, torrent_ttl, *call_args, key=cache_key, force_refresh=rescrape)
             if all_sources is None:
                 all_sources = {'cached': [], 'uncached': []}
-            self.torrentUnCacheSources += all_sources.get('uncached', [])
-            self.torrentCacheSources += all_sources.get('cached', [])
-            self.torrentSources += all_sources.get('cached', []) + all_sources.get('uncached', [])
+            uncached = all_sources.get('uncached', [])
+            cached = all_sources.get('cached', [])
+            count = len(cached) + len(uncached)
+            self.torrentUnCacheSources += uncached
+            self.torrentCacheSources += cached
+            self.torrentSources += cached + uncached
+            success = True
         except Exception as e:
             control.log(f"Error in torrent worker [{provider}]: {e}", 'warning')
         finally:
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+            database.record_scraper_metric(provider, duration_ms, count, success)
             if provider in self.remainingProviders:
                 self.remainingProviders.remove(provider)
 
     def _hoster_sources_worker(self, hoster, query, mal_id, episode, status, media_type, rescrape, season, part):
+        t0 = time.perf_counter()
+        count = 0
+        success = False
         try:
             mod, cache_key, _, merge_mode = _HOSTER_MODULES[hoster]
             sources_obj = mod.Sources()
@@ -206,18 +218,29 @@ class Sources(GetSources):
             if all_sources is None:
                 all_sources = {'cached': [], 'uncached': []}
             if merge_mode == 'cached_only':
-                self.hosterSources += all_sources.get('cached', [])
+                cached = all_sources.get('cached', [])
+                count = len(cached)
+                self.hosterSources += cached
             else:
-                self.torrentUnCacheSources += all_sources.get('uncached', [])
-                self.torrentCacheSources += all_sources.get('cached', [])
-                self.torrentSources += all_sources.get('cached', []) + all_sources.get('uncached', [])
+                uncached = all_sources.get('uncached', [])
+                cached = all_sources.get('cached', [])
+                count = len(cached) + len(uncached)
+                self.torrentUnCacheSources += uncached
+                self.torrentCacheSources += cached
+                self.torrentSources += cached + uncached
+            success = True
         except Exception as e:
             control.log(f"Error in hoster worker [{hoster}]: {e}", 'warning')
         finally:
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+            database.record_scraper_metric(hoster, duration_ms, count, success)
             if hoster in self.remainingProviders:
                 self.remainingProviders.remove(hoster)
 
     def _embed_sources_worker(self, pid, mod, cache_key, skip_prefix, needs_media_type, mal_id, episode, media_type, rescrape):
+        t0 = time.perf_counter()
+        count = 0
+        success = False
         try:
             get_sources = mod.Sources().get_sources
             scraper_ttl = control.getInt('cache.scrapers.ttl') or 8
@@ -225,12 +248,17 @@ class Sources(GetSources):
                 src = database.get(get_sources, scraper_ttl, mal_id, episode, media_type, key=cache_key, force_refresh=rescrape)
             else:
                 src = database.get(get_sources, scraper_ttl, mal_id, episode, key=cache_key, force_refresh=rescrape)
-            self.embedSources += src or []
+            sources = src or []
+            count = len(sources)
+            self.embedSources += sources
             if skip_prefix:
-                self._apply_embed_skip(skip_prefix, src or [])
+                self._apply_embed_skip(skip_prefix, sources)
+            success = True
         except Exception as e:
             control.log(f"Error in embed worker [{pid}]: {e}", 'warning')
         finally:
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+            database.record_scraper_metric(pid, duration_ms, count, success)
             if pid in self.remainingProviders:
                 self.remainingProviders.remove(pid)
 

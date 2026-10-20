@@ -1670,6 +1670,67 @@ def MARKED_AS_WATCHED(payload, params):
     control.exit_code()
 
 
+@multi_route(*_wildcard_browser_paths('mark_previous_watched'))
+def MARK_PREVIOUS_WATCHED(payload, params):
+    from resources.lib.WatchlistIntegration import watchlist_update_episode
+    import service
+
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) >= 2:
+        mal_id, ep_str = parts[0], parts[1]
+    else:
+        return
+    try:
+        target_ep = int(ep_str)
+    except (ValueError, TypeError):
+        return
+
+    # User confirmation dialog
+    show = database.get_show(mal_id)
+    title = ''
+    if show:
+        try:
+            kodi_meta = pickle.loads(show['kodi_meta'])
+            title = kodi_meta.get('title_userPreferred', '')
+        except Exception:
+            title = ''
+    anime_label = f" for '{title}'" if title else ""
+    confirmed = control.yesno_dialog(
+        "Mark Episodes as Watched",
+        f"Mark episodes 1 to {target_ep}{anime_label} as watched in your WatchLists and Watch History?"
+    )
+    if not confirmed:
+        return
+
+    # Update watchlist for target_ep (MAL/AniList/Simkl/Kitsu sets progress to target_ep)
+    any_completed = watchlist_update_episode(mal_id, target_ep)
+    if any_completed:
+        control.sleep(3000)
+        service.sync_watchlist(True)
+
+    # Save to watch history for target_ep
+    try:
+        save_to_watch_history(mal_id, target_ep)
+    except Exception as e:
+        control.log(f"Error saving to watch history: {e}", "warning")
+
+    # Invalidate cached eps_watched in kodi_meta so UI repaints playcounts
+    if show:
+        try:
+            kodi_meta = pickle.loads(show['kodi_meta'])
+            kodi_meta['eps_watched'] = target_ep
+            database.update_kodi_meta(mal_id, kodi_meta)
+        except Exception as e:
+            control.log(f"Error updating kodi_meta: {e}", "warning")
+
+    # Build notification showing updated watchlists
+    enabled = control.enabled_watchlists()
+    flavor_labels = {'anilist': 'AniList', 'kitsu': 'Kitsu', 'mal': 'MAL', 'simkl': 'Simkl'}
+    updated_names = ', '.join([flavor_labels.get(f, f.capitalize()) for f in enabled]) if enabled else 'Local History'
+    control.notify(control.ADDON_NAME, f"Episodes 1 to {target_ep} Marked as Watched in {updated_names}")
+    control.execute("Container.Refresh")
+
+
 @Route('delete_anime_database/*')
 def DELETE_ANIME_DATABASE(payload, params):
     parts = [p for p in payload.strip('/').split('/') if p]
@@ -2058,6 +2119,18 @@ def REBUILD_DATABASE(payload, params):
 def DATABASE_STATS(payload, params):
     stats = database.get_database_stats()
     control.textviewer_dialog('Otaku Database & Storage Telemetry', stats)
+
+
+@Route('scraper_stats')
+def SCRAPER_STATS(payload, params):
+    report = database.get_scraper_metrics_report()
+    control.textviewer_dialog('Otaku Scraper Health & Latency Dashboard', report)
+
+
+@Route('clear_scraper_metrics')
+def CLEAR_SCRAPER_METRICS(payload, params):
+    database.clear_scraper_metrics()
+    control.notify(control.ADDON_NAME, "Scraper telemetry metrics cleared", time=3000)
 
 
 @Route('vacuum_databases')

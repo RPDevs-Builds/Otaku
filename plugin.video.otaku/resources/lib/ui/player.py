@@ -604,20 +604,26 @@ class WatchlistPlayer(player):
             preffeded_subtitle_keyword = keywords[self.preferred_subtitle_keyword]
 
             # Set preferred audio stream
+            selected_audio_stream = None
             if audio_streams:
                 for stream in audio_streams:
                     if stream.get('language') == preferred_audio_streams:
                         self.setAudioStream(stream['index'])
+                        selected_audio_stream = stream
                         break
                 else:
                     # If no preferred audio stream is found, set to the default audio stream
                     for stream in audio_streams:
                         if stream.get('isdefault', False):
                             self.setAudioStream(stream['index'])
+                            selected_audio_stream = stream
                             break
                     else:
                         # If no default audio stream is found, set to the first available audio stream
                         self.setAudioStream(audio_streams[0]['index'])
+                        selected_audio_stream = audio_streams[0]
+
+            active_audio_lang = (selected_audio_stream.get('language') or '').lower() if selected_audio_stream else preferred_audio_streams
 
             # Set preferred subtitle stream
             subtitle_int = None
@@ -631,18 +637,17 @@ class WatchlistPlayer(player):
             # Type and Keyword filtering
             if control.getBool('general.subtitles.keyword') or control.getBool('general.subtitles.type'):
                 for index, sub in enumerate(subtitle_streams):
-
                     # Check for type match
                     if control.getBool('general.subtitles.type'):
-                        if sub['language'] == preferred_subtitle_lang:
-                            if sub[preffeded_subtitle_type]:
+                        if sub.get('language') == preferred_subtitle_lang:
+                            if sub.get(preffeded_subtitle_type):
                                 subtitle_int = index
                                 break
 
                     # Check for keyword match
                     if control.getBool('general.subtitles.keyword'):
-                        if sub['language'] == preferred_subtitle_lang:
-                            sub_name_lower = sub['name'].lower()
+                        if sub.get('language') == preferred_subtitle_lang:
+                            sub_name_lower = (sub.get('name') or '').lower()
                             if isinstance(preffeded_subtitle_keyword, list):
                                 if any(kw in sub_name_lower for kw in preffeded_subtitle_keyword):
                                     subtitle_int = index
@@ -651,18 +656,38 @@ class WatchlistPlayer(player):
                                 subtitle_int = index
                                 break
 
-                # fallback to first of preferred language if no type or keyword match
+            # Smart Subtitle Pairing:
+            # When active audio is English Dub: prioritize Signs & Songs / Forced subtitle track
+            # When active audio is Japanese or foreign: prioritize Full Dialogue track (avoid signs & songs)
+            if subtitle_int is None and subtitle_streams:
+                is_dub_active = (active_audio_lang == 'eng')
+                if is_dub_active and control.getBool('general.dubsubtitles'):
+                    # Look for Signs & Songs or Forced tracks in preferred subtitle language
+                    signs_keywords = ['signs', 'songs', 'forced', 's&s']
+                    for index, sub in enumerate(subtitle_streams):
+                        if sub.get('language') == preferred_subtitle_lang:
+                            sname = (sub.get('name') or '').lower()
+                            if any(k in sname for k in signs_keywords) or sub.get('isforced'):
+                                subtitle_int = index
+                                break
+
+                elif not is_dub_active:
+                    # Foreign audio (Japanese etc.): look for full dialogue track in preferred subtitle language
+                    signs_keywords = ['signs', 'songs', 's&s']
+                    for index, sub in enumerate(subtitle_streams):
+                        if sub.get('language') == preferred_subtitle_lang:
+                            sname = (sub.get('name') or '').lower()
+                            # If not exclusively a signs/songs track, prefer it
+                            if not any(k in sname for k in signs_keywords) and not sub.get('isforced'):
+                                subtitle_int = index
+                                break
+
+                # Fallback to first track of preferred language if smart pairing didn't find specific track
                 if subtitle_int is None:
                     for index, sub in enumerate(subtitle_streams):
-                        if sub['language'] == preferred_subtitle_lang:
+                        if sub.get('language') == preferred_subtitle_lang:
                             subtitle_int = index
                             break
-            else:
-                # No type filter or keyword filter, just check for preferred language
-                for index, sub in enumerate(subtitle_streams):
-                    if sub['language'] == preferred_subtitle_lang:
-                        subtitle_int = index
-                        break
 
             if subtitle_streams:
                 if subtitle_int is None:
@@ -672,40 +697,23 @@ class WatchlistPlayer(player):
                             subtitle_int = index
                             break
                     else:
-                        # If no default subtitle stream is found, set to the first available subtitle stream
                         subtitle_int = 0
 
                 if subtitle_int is not None:
                     self.setSubtitleStream(subtitle_int)
 
-            # Enable and Disable Subtitles based on audio streams
-            if len(audio_streams) == 1:
-                audio_langs = [s.get('language', '').lower() for s in audio_streams]
-                if "jpn" in audio_langs:
-                    self.showSubtitles(preferred_subtitle_lang != "none")
-                elif "eng" in audio_langs:
-                    if control.getBool('general.dubsubtitles') and preferred_subtitle_lang != "none":
-                        self.showSubtitles(True)
-                    else:
-                        self.showSubtitles(False)
+            # Enable and Disable Subtitles based on the ACTUALLY ACTIVE audio stream
+            if preferred_subtitle_lang == "none":
+                self.showSubtitles(False)
+            elif active_audio_lang == "eng":
+                # English Dub audio is active
+                if control.getBool('general.dubsubtitles'):
+                    self.showSubtitles(True)
                 else:
-                    self.showSubtitles(preferred_subtitle_lang != "none")
-
-            if len(audio_streams) > 1:
-                if preferred_audio_streams == "eng":
-                    if control.getBool('general.dubsubtitles'):
-                        if preferred_subtitle_lang == "none":
-                            self.showSubtitles(False)
-                        else:
-                            self.showSubtitles(True)
-                    else:
-                        self.showSubtitles(False)
-
-                if preferred_audio_streams == "jpn":
-                    if preferred_subtitle_lang == "none":
-                        self.showSubtitles(False)
-                    else:
-                        self.showSubtitles(True)
+                    self.showSubtitles(False)
+            else:
+                # Japanese or foreign language audio is active (or single non-English track)
+                self.showSubtitles(True)
 
     # ── Skip Time Processing (AniSkip / AnimeSkip / Embed / FFprobe chapters) ─
 

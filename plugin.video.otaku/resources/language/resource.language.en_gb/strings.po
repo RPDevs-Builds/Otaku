@@ -2184,3 +2184,47 @@ msgstr ""
 msgctxt "#30541"
 msgid "Embeds Only"
 msgstr ""
+
+msgctxt "#30542"
+msgid "Scraper Health & Latency Dashboard"
+msgstr ""
+
+msgctxt "#30543"
+msgid "View average latency, response times, and success rates for all scrapers."
+msgstr ""
+
+msgctxt "#30544"
+msgid "Hide Spoiler Thumbnails"
+msgstr ""
+
+msgctxt "#30545"
+msgid "Shield episode thumbnails for unwatched episodes to prevent plot spoilers."
+msgstr ""
+
+msgctxt "#30546"
+msgid "Shield Artwork Mode"
+msgstr ""
+
+msgctxt "#30547"
+msgid "Series Fanart (Backdrop)"
+msgstr ""
+
+msgctxt "#30548"
+msgid "Series Poster"
+msgstr ""
+
+msgctxt "#30549"
+msgid "Mark Episodes Up To Here as Watched"
+msgstr ""
+
+msgctxt "#30550"
+msgid "Show 'Mark Episodes Up To Here as Watched' in episode context menu."
+msgstr ""
+
+msgctxt "#30551"
+msgid "Clear Scraper Telemetry"
+msgstr ""
+
+msgctxt "#30552"
+msgid "Reset all recorded scraper response latency and success statistics."
+msgstr ""

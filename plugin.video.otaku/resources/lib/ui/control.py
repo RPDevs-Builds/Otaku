@@ -413,6 +413,7 @@ def process_context():
         "context.otaku.deletefromdatabase",
         "context.otaku.watchlist",
         "context.otaku.markedaswatched",
+        "context.otaku.markpreviouswatched",
         "context.otaku.fanartselect",
         "context.otaku.clearcache"
     ]
