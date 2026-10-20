@@ -240,6 +240,7 @@ def _main_menu():
         (control.lang(30016), "top_100", 'top_100_anime.png', {}),
         (control.lang(30017), "genres", 'genres_&_tags.png', {}),
         (control.lang(30018), "search", 'search.png', {}),
+        (control.lang(30555), "my_cloud", 'tools.png', {}),
         (control.lang(30019), "tools", 'tools.png', {}),
     ]
 
@@ -262,6 +263,7 @@ def _tools_menu():
         (30076, 'wipe_addon_data', 'wipe_addon_data.png'),
         (30077, 'completed_sync', 'sync_completed.png'),
         (30078, 'download_manager', 'download_manager.png'),
+        (30555, 'my_cloud', 'tools.png'),
         (30079, 'sort_select', 'sort_select.png'),
         (30080, 'clear_selected_fanart', 'wipe_addon_data.png'),
     )
@@ -309,6 +311,15 @@ def add_next_up(items):
     """Add Next Up menu item if enabled in watchlist settings."""
     if control.getBool('watchlist.update.enabled') and control.getBool('nextup.enabled'):
         items.append((control.lang(30451), "next_up", 'next_up.png', {}))
+    return items
+
+
+def add_my_cloud(items):
+    """Add My Debrid Cloud menu item if enabled and at least one debrid is active."""
+    if control.getBool('interface.menu.my_cloud', default=True):
+        from resources.lib.debrid import debrid_cloud
+        if debrid_cloud.get_active_providers():
+            items.append((control.lang(30555), "my_cloud", 'tools.png', {}))
     return items
 
 
@@ -1305,6 +1316,26 @@ def PLAY(payload, params):
         elif context == 1:
             resume = None
 
+    # Guard against premature scraping of unaired episodes
+    episode_info = params.get('info', {})
+    aired_str = episode_info.get('aired')
+    if aired_str and not rescrape and not source_select:
+        try:
+            from datetime import date
+            aired_date = date.fromisoformat(aired_str[:10])
+            today = date.today()
+            if aired_date > today:
+                diff_days = (aired_date - today).days
+                day_str = "tomorrow" if diff_days == 1 else f"in {diff_days} days ({aired_date.strftime('%a, %b %d')})"
+                confirmed = control.yesno_dialog(
+                    control.ADDON_NAME,
+                    f"Episode {episode} is not scheduled to air until {day_str}.\n\nSearch for early releases or raw leaks anyway?"
+                )
+                if not confirmed:
+                    return control.exit_code()
+        except Exception:
+            pass
+
     sources = MetaBrowser.get_sources(mal_id, episode, 'show', rescrape, source_select)
     if sources:
         _mock_args = {"mal_id": mal_id, "episode": episode, 'play': True, 'resume': resume, 'context': rescrape or source_select, 'params': params}
@@ -1861,6 +1892,8 @@ def _collect_category_menu_items(menu_items_key, settings_key, extra_key_suffix)
         enabled_items = add_watch_history(enabled_items)
     if "next_up%s" % extra_key_suffix in enabled_ids:
         enabled_items = add_next_up(enabled_items)
+    if "my_cloud%s" % extra_key_suffix in enabled_ids or (menu_items_key == 'main' and control.getBool('interface.menu.my_cloud', default=True) and "my_cloud" not in enabled_ids):
+        enabled_items = add_my_cloud(enabled_items)
     for item in get_menu_items(menu_items_key):
         if item[1] in enabled_ids:
             enabled_items.append(item)
@@ -2225,6 +2258,112 @@ def SORT_SELECT(payload, params):
 def DOWNLOAD_MANAGER(payload, params):
     from resources.lib.windows.download_manager import DownloadManager
     DownloadManager('download_manager.xml', control.ADDON_PATH).doModal()
+
+
+def _draw_cloud_directory(provider, folder_id=None):
+    from resources.lib.debrid import debrid_cloud
+    raw_items = debrid_cloud.get_cloud_items(provider, folder_id)
+    if not raw_items:
+        control.draw_items([], 'files')
+        return
+
+    from urllib import parse
+    list_items = []
+    for itm in raw_items:
+        is_folder = itm.get('is_folder', False)
+        title = itm.get('name', 'Unknown')
+        cm = []
+        if is_folder:
+            url = f"my_cloud/{provider}/{itm['id']}"
+            is_playable = False
+            cm.append(('Delete from Cloud', f'RunPlugin(plugin://{control.ADDON_ID}/delete_cloud_item/{provider}/{itm["id"]})'))
+        else:
+            ref_encoded = parse.quote(itm.get('file_ref', ''), safe='')
+            url = f"play_cloud_file/{provider}/{itm['id']}/{ref_encoded}"
+            is_playable = True
+
+        info = {
+            'title': itm.get('title', title),
+            'plot': f"Provider: {provider.capitalize()}\nSize: {itm.get('size', 'Unknown')}",
+            'mediatype': 'video' if not is_folder else 'files'
+        }
+        item_obj = utils.allocate_item(title, url, is_folder, is_playable, cm, 'tools.png', info)
+        list_items.append(item_obj)
+
+    view_type = 'addons' if control.getBool('interface.content_type') else ''
+    control.draw_items(list_items, view_type)
+
+
+@multi_route('my_cloud', 'my_cloud/')
+def MY_CLOUD(payload, params):
+    from resources.lib.debrid import debrid_cloud
+    providers = debrid_cloud.get_active_providers()
+    if not providers:
+        control.notify(control.ADDON_NAME, "No active Debrid accounts found", icon=control.ADDON_ICON)
+        item = utils.allocate_item("No Debrid Accounts Enabled (Configure in Settings)", "settings", False, False, [], 'tools.png')
+        control.draw_items([item], '')
+        return
+
+    if len(providers) == 1:
+        provider = list(providers.keys())[0]
+        _draw_cloud_directory(provider, None)
+    else:
+        items = []
+        for p_key, p_name in providers.items():
+            items.append(utils.allocate_item(f"{p_name} Cloud", f"my_cloud/{p_key}", True, False, [], 'tools.png', {'title': f"{p_name} Cloud"}))
+        view_type = 'addons' if control.getBool('interface.content_type') else ''
+        control.draw_items(items, view_type)
+
+
+@Route('my_cloud/*')
+def MY_CLOUD_BROWSER(payload, params):
+    parts = [p for p in payload.strip('/').split('/') if p]
+    provider = parts[0] if parts else ''
+    folder_id = parts[1] if len(parts) > 1 else None
+    _draw_cloud_directory(provider, folder_id)
+
+
+@Route('play_cloud_file/*')
+def PLAY_CLOUD_FILE(payload, params):
+    import xbmcgui
+    import xbmcplugin
+    from urllib import parse
+    from resources.lib.debrid import debrid_cloud
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) < 3:
+        control.notify(control.ADDON_NAME, "Invalid cloud file reference", icon=control.ADDON_ICON)
+        return control.exit_code()
+
+    provider = parts[0]
+    item_id = parts[1]
+    file_ref = parse.unquote(parts[2])
+
+    stream_url = debrid_cloud.resolve_stream_url(provider, item_id, file_ref)
+    if not stream_url:
+        control.notify(control.ADDON_NAME, f"Failed to resolve {provider.capitalize()} streaming link", icon=control.ADDON_ICON)
+        return control.exit_code()
+
+    item = xbmcgui.ListItem(path=stream_url)
+    item.setProperty('IsPlayable', 'true')
+    xbmcplugin.setResolvedUrl(control.HANDLE, True, item)
+
+
+@Route('delete_cloud_item/*')
+def DELETE_CLOUD_ITEM(payload, params):
+    from resources.lib.debrid import debrid_cloud
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) < 2:
+        return
+    provider = parts[0]
+    item_id = parts[1]
+    confirmed = control.yesno_dialog(control.ADDON_NAME, f"Delete this item from your {provider.capitalize()} cloud?")
+    if confirmed:
+        success = debrid_cloud.delete_cloud_item(provider, item_id)
+        if success:
+            control.notify(control.ADDON_NAME, "Item removed from cloud", icon=control.ADDON_ICON)
+            control.refresh()
+        else:
+            control.notify(control.ADDON_NAME, "Failed to delete item from cloud", icon=control.ADDON_ICON)
 
 
 @Route('import_settings')

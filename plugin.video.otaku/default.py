@@ -32,6 +32,7 @@ if __name__ == "__main__":
     control.process_context()
     from resources.lib import Main  # noQA
     plugin_url = control.get_plugin_url(sys.argv[0])
+    Main.plugin_url = plugin_url
     plugin_params = control.get_plugin_params(sys.argv[2])
     router_process(plugin_url, plugin_params)
     control.log(f'Finished Running: {plugin_url=} {plugin_params=}')

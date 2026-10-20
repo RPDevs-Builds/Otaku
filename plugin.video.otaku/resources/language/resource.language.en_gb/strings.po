@@ -2228,3 +2228,27 @@ msgstr ""
 msgctxt "#30552"
 msgid "Reset all recorded scraper response latency and success statistics."
 msgstr ""
+
+msgctxt "#30553"
+msgid "Show Airing Countdown on Upcoming Episodes"
+msgstr ""
+
+msgctxt "#30554"
+msgid "Display days and weekday countdown until future episodes air on currently airing anime."
+msgstr ""
+
+msgctxt "#30555"
+msgid "My Debrid Cloud"
+msgstr ""
+
+msgctxt "#30556"
+msgid "Browse and stream active torrents and cached files directly from your Debrid cloud."
+msgstr ""
+
+msgctxt "#30557"
+msgid "Show My Debrid Cloud in Main Menu"
+msgstr ""
+
+msgctxt "#30558"
+msgid "Delete from Cloud"
+msgstr ""

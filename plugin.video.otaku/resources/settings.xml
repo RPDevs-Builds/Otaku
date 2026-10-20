@@ -114,6 +114,16 @@
 					<default>false</default>
 					<control type="toggle"/>
 				</setting>
+				<setting id="interface.aired.show_countdown" type="boolean" label="30553" help="30554">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="interface.menu.my_cloud" type="boolean" label="30557" help="30556">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
 				<setting id="interface.content_type" type="boolean" label="30387" help="30388">
 					<level>0</level>
 					<default>false</default>
@@ -2899,12 +2909,13 @@
 			<group id="1" label="30407" help="">
 				<setting id="menu.mainmenu.config" type="list[string]" label="30404" help="">
 					<level>0</level>
-					<default>last_watched,watch_history,next_up,airing_calendar,airing_last_season,airing_this_season,airing_next_season,trending,popular,voted,favourites,top_100,genres,search,tools</default>
+					<default>last_watched,watch_history,next_up,my_cloud,airing_calendar,airing_last_season,airing_this_season,airing_next_season,trending,popular,voted,favourites,top_100,genres,search,tools</default>
 					<constraints>
 						<options>
 							<option label="30000">last_watched</option>
 							<option label="30068">watch_history</option>
 							<option label="30451">next_up</option>
+							<option label="30555">my_cloud</option>
 							<option label="30001">airing_calendar</option>
 							<option label="30002">airing_last_season</option>
 							<option label="30003">airing_this_season</option>
