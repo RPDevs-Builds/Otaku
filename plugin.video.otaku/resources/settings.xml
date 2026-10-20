@@ -68,11 +68,6 @@
 					<default>false</default>
 					<control type="toggle"/>
 				</setting>
-				<setting id="general.kodi.cache" type="boolean" label="30459" help="">
-					<level>0</level>
-					<default>true</default>
-					<control type="toggle"/>
-				</setting>
 				<setting id="interface.watchlist.data" type="boolean" label="30112" help="">
 					<level>0</level>
 					<default>true</default>
@@ -1086,12 +1081,38 @@
 		<category id="Cache" label="30086" help="">
 			<!-- Cache Settings -->
 			<group id="1" label="30489" help="">
-				<setting id="clear_cache_cache_page" type="action" label="30072" help="">
+				<setting id="clear_cache_all" type="action" label="30490" help="">
 					<level>0</level>
 					<data>RunPlugin(plugin://plugin.video.otaku/clear_cache?setting=true)</data>
 					<control type="button" format="action">
 						<close>true</close>
 					</control>
+				</setting>
+				<setting id="clear_cache_scrapers" type="action" label="30491" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_scrapers_cache?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="clear_cache_debrid" type="action" label="30492" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_debrid_cache?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="clear_cache_metadata" type="action" label="30495" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_metadata_cache?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="general.kodi.cache" type="boolean" label="30459" help="">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
 				</setting>
 				<setting id="cache.scrapers.ttl" type="integer" label="30487" help="">
 					<level>0</level>
@@ -1112,6 +1133,30 @@
 						<minimum>1</minimum>
 						<step>1</step>
 						<maximum>168</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="cache.metadata.ttl" type="integer" label="30493" help="">
+					<level>0</level>
+					<default>24</default>
+					<constraints>
+						<minimum>1</minimum>
+						<step>1</step>
+						<maximum>72</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="cache.calendar.ttl" type="integer" label="30494" help="">
+					<level>0</level>
+					<default>24</default>
+					<constraints>
+						<minimum>1</minimum>
+						<step>1</step>
+						<maximum>48</maximum>
 					</constraints>
 					<control type="slider" format="integer">
 						<popup>false</popup>

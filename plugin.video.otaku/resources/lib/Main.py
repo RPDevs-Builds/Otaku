@@ -1866,6 +1866,26 @@ def CLEAR_CACHE(payload, params):
     database.cache_clear()
 
 
+@Route('clear_scrapers_cache')
+def CLEAR_SCRAPERS_CACHE(payload, params):
+    control.setSetting('last_played_source', str(None))
+    database.cache_clear_scrapers()
+
+
+@Route('clear_debrid_cache')
+def CLEAR_DEBRID_CACHE(payload, params):
+    from resources.lib.debrid import debrid_cache
+    debrid_cache.clear_debrid_cache()
+    control.notify(
+        f'{control.ADDON_NAME}: Debrid Cache',
+        'Debrid cache successfully cleared', time=5000, sound=False)
+
+
+@Route('clear_metadata_cache')
+def CLEAR_METADATA_CACHE(payload, params):
+    database.cache_clear_metadata()
+
+
 @multi_route(*_CLEAR_SEARCH_HISTORY_ROUTES)
 def CLEAR_SEARCH_HISTORY(payload, params):
     format = _CLEAR_SEARCH_HISTORY_MAP.get(plugin_url)

@@ -1976,3 +1976,27 @@ msgstr ""
 msgctxt "#30489"
 msgid "Cache Settings"
 msgstr ""
+
+msgctxt "#30490"
+msgid "Clear All Cache"
+msgstr ""
+
+msgctxt "#30491"
+msgid "Clear Scrapers Cache Only"
+msgstr ""
+
+msgctxt "#30492"
+msgid "Clear Debrid Cache Only"
+msgstr ""
+
+msgctxt "#30493"
+msgid "Metadata Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30494"
+msgid "Airing Calendar Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30495"
+msgid "Clear Metadata Cache Only"
+msgstr ""

@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 2026-10-19
 
 ### Added
-- **Dedicated Cache Settings Menu & TTL Controls (`settings.xml`, `pages/__init__.py`, `debrid_cache.py`)**:
-  - Added dedicated **Cache** category under Addon Settings with configurable TTL sliders for scrapers (`cache.scrapers.ttl`, 1–72 hours, default 8h) and torrents/debrid (`cache.torrents.ttl`, 1–168 hours, default 24h).
-  - Added duplicated **Clear Cache** action button directly on the Cache settings page for convenient cache wiping when adjusting durations.
+- **Centralized Cache Settings Hub & Granular Actions (`settings.xml`, `database.py`, `Main.py`, `AnimeSchedule.py`)**:
+  - Expanded **Cache** settings tab with 4 granular clearing actions: **Clear All Cache**, **Clear Scrapers Cache Only**, **Clear Debrid Cache Only**, and **Clear Metadata Cache Only**.
+  - Relocated **Enable Kodi RAM Cache** toggle (`general.kodi.cache`) into the Cache category.
+  - Added 4 customizable TTL duration sliders: **Scrapers Cache TTL** (1–72h), **Torrents Cache TTL** (1–168h), **Metadata Cache TTL** (1–72h), and **Airing Calendar Cache TTL** (1–48h).
+  - Wired metadata TTL resolution into `database.get()` and calendar TTL into `AnimeScheduleCalendar`.
 
 ### Fixed
 - **Debrid Cache Maintenance & Storage Pruning (`debrid_cache.py`, `database.py`)**:

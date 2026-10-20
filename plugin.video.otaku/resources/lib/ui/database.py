@@ -184,6 +184,9 @@ def get(function, duration, *args, **kwargs):
     :param args/kwargs:  Forwarded to *function* on miss.
         Special kwarg ``key`` is popped and appended to the cache key.
     """
+    if 'Browser' in getattr(function, '__module__', ''):
+        duration = control.getInt('cache.metadata.ttl') or duration
+
     key = _hash_function(function, args, kwargs)
     if 'key' in kwargs:
         key += kwargs.pop('key')
@@ -310,6 +313,29 @@ def cache_clear():
     control.notify(
         f'{control.ADDON_NAME}: {control.lang(30086)}',
         control.lang(30087), time=5000, sound=False)
+
+
+def cache_clear_scrapers():
+    """Wipe scraper and API response cache without touching metadata, debrid, or watchlists."""
+    with SQL(control.cacheFile) as cur:
+        cur.execute("DELETE FROM cache WHERE key NOT LIKE '%Browser.%'")
+        cur.execute("VACUUM")
+        cur.connection.commit()
+    control.notify(
+        f'{control.ADDON_NAME}: Scraper Cache',
+        'Scraper cache successfully cleared', time=5000, sound=False)
+
+
+def cache_clear_metadata():
+    """Wipe browser metadata cache and AniList enrichment without touching scrapers, debrid, or watchlists."""
+    with SQL(control.cacheFile) as cur:
+        cur.execute("DELETE FROM cache WHERE key LIKE '%Browser.%'")
+        cur.execute("VACUUM")
+        cur.connection.commit()
+    clear_anilist_enrichment()
+    control.notify(
+        f'{control.ADDON_NAME}: Metadata Cache',
+        'Metadata cache successfully cleared', time=5000, sound=False)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
