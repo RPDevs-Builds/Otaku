@@ -387,6 +387,7 @@ def cache_clear():
     clear_watchlist_cache()
     clear_watchlist_activity()
     clear_anilist_enrichment()
+    clear_season_pack()
 
     control.notify(
         f'{control.ADDON_NAME}: {control.lang(30086)}',
@@ -399,6 +400,7 @@ def cache_clear_scrapers():
         cur.execute("DELETE FROM cache WHERE key NOT LIKE '%Browser.%'")
         cur.execute("VACUUM")
         cur.connection.commit()
+    clear_season_pack()
     control.notify(
         f'{control.ADDON_NAME}: Scraper Cache',
         'Scraper cache successfully cleared', time=5000, sound=False)
@@ -421,9 +423,121 @@ def cache_clear_show(mal_id):
     with SQL(control.cacheFile) as cur:
         cur.execute("DELETE FROM cache WHERE key LIKE ?", (f'%{mal_id}%',))
         cur.connection.commit()
+    clear_season_pack(mal_id)
     control.notify(
         f'{control.ADDON_NAME}: Show Cache',
         f'Cache for anime ID {mal_id} cleared', time=4000, sound=False)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Season Pack & Playback Continuity Caching
+# ═══════════════════════════════════════════════════════════════════════════
+
+def set_season_pack(mal_id, season, source):
+    """Cache the selected season pack source for subsequent episode playback."""
+    if not source or not mal_id:
+        return
+    key = f"season_pack_{mal_id}_{season or 1}"
+    source_copy = dict(source)
+    source_repr = repr(source_copy)
+    duration = 720  # 30 days
+    _cache_write(key, source_repr)
+    _mem_set(key, source_repr, duration)
+
+
+def get_season_pack(mal_id, season=1):
+    """Retrieve the cached season pack source for this show and season."""
+    if not mal_id:
+        return None
+    key = f"season_pack_{mal_id}_{season or 1}"
+    mem = _mem_get(key)
+    if mem is not None:
+        return mem
+    _init_cache_table()
+    with SQL(control.cacheFile) as cur:
+        cur.execute('SELECT value, date FROM cache WHERE key=?', (key,))
+        row = cur.fetchone()
+    if row and is_cache_valid(row['date'], 720):
+        try:
+            data = ast.literal_eval(row['value'])
+            if data:
+                _mem_set(key, row['value'], 720)
+                return data
+        except Exception:
+            pass
+    return None
+
+
+def clear_season_pack(mal_id=None, season=None):
+    """Purge cached season packs from SQLite and memory cache."""
+    _init_cache_table()
+    with SQL(control.cacheFile) as cur:
+        if mal_id and season:
+            key = f"season_pack_{mal_id}_{season}"
+            cur.execute('DELETE FROM cache WHERE key=?', (key,))
+            _mem_del(key)
+        elif mal_id:
+            cur.execute("DELETE FROM cache WHERE key LIKE ?", (f"season_pack_{mal_id}_%",))
+            for s in range(1, 10):
+                _mem_del(f"season_pack_{mal_id}_{s}")
+        else:
+            cur.execute("DELETE FROM cache WHERE key LIKE 'season_pack_%'")
+        cur.connection.commit()
+
+
+def save_last_played_source(mal_id, source):
+    """Save structured metadata of the last played source for smart scoring."""
+    if not source or not mal_id:
+        return
+    from resources.lib.ui import source_utils
+    key = f"last_played_{mal_id}"
+    meta = {
+        'mal_id': str(mal_id),
+        'type': source.get('type', ''),
+        'provider': source.get('provider', ''),
+        'debrid_provider': source.get('debrid_provider', ''),
+        'quality': source.get('quality', 0),
+        'release_title': source.get('release_title', ''),
+        'hash': source.get('hash', ''),
+        'info': source.get('info', []),
+        'lang': source.get('lang', ''),
+        'release_group': source_utils.extract_release_group(source.get('release_title', '')),
+        'is_season_pack': source_utils.is_season_pack(source),
+        'timestamp': int(time.time()),
+    }
+    meta_repr = repr(meta)
+    duration = 720
+    _cache_write(key, meta_repr)
+    _mem_set(key, meta_repr, duration)
+    # Maintain backward compatibility with legacy setting string
+    if meta['type'] in ['embed', 'direct']:
+        control.setSetting('last_played_source', str(source.get('provider', '')) + " " + " ".join(map(str, source.get('info', []))))
+    else:
+        control.setSetting('last_played_source', str(source.get('release_title', '')))
+
+
+def get_last_played_source(mal_id):
+    """Retrieve structured metadata of the last played source for smart scoring."""
+    if not mal_id:
+        return None
+    key = f"last_played_{mal_id}"
+    mem = _mem_get(key)
+    if mem is not None:
+        return mem
+    _init_cache_table()
+    with SQL(control.cacheFile) as cur:
+        cur.execute('SELECT value, date FROM cache WHERE key=?', (key,))
+        row = cur.fetchone()
+    if row and is_cache_valid(row['date'], 720):
+        try:
+            data = ast.literal_eval(row['value'])
+            if data:
+                _mem_set(key, row['value'], 720)
+                return data
+        except Exception:
+            pass
+    return None
+
 
 
 def _format_db_bytes(size=0):

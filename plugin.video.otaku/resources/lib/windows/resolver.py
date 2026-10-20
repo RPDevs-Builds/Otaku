@@ -6,7 +6,7 @@ import urllib.parse
 
 from resources.lib.WatchlistIntegration import watchlist_update_episode
 from resources.lib.debrid import all_debrid, debrid_link, easynews, premiumize, real_debrid, torbox, easydebrid
-from resources.lib.ui import client, control, ffprobe_chapters, source_utils, player
+from resources.lib.ui import client, control, database, ffprobe_chapters, source_utils, player
 from resources.lib.windows.base_window import BaseWindow
 
 control.sys.path.append(control.dataPath)
@@ -54,7 +54,8 @@ class Resolver(BaseWindow):
         self.source_select = source_select
         self.pack_select = False
         self.mal_id = actionArgs['mal_id']
-        # self.season = database.get_episode(self.mal_id)['season']
+        ep_data = database.get_episode(self.mal_id)
+        self.season = ep_data.get('season', 1) if ep_data else 1
         self.episode = int(actionArgs.get('episode', 1))
         self.play = actionArgs.get('play')
         self.source_select_close = actionArgs.get('close')
@@ -64,65 +65,121 @@ class Resolver(BaseWindow):
         self.params = actionArgs.get('params', {})
         self.abort = False
         self._handle_resolved = False
-
-        # if self.season:
-        #     control.setStr('resolve_season', str(self.season))
-
-        # if self.source_select:
-        #     control.setSetting('last_played_source', str(None))
+        self._fallback_attempted = False
 
     def onInit(self):
         self.sources = self.reorder_sources(self.sources)
         self.resolve(self.sources)
 
     def reorder_sources(self, sources):
+        if len(sources) <= 1 or self.source_select:
+            return sources
+
+        last_meta = database.get_last_played_source(self.mal_id)
+        lp_setting = control.getSetting('last_played_source')
+        lp_str = lp_setting if isinstance(lp_setting, str) else ''
+
+        if not last_meta and not lp_str:
+            return sources
+
+        target_ep = str(self.episode)
+        target_ep_int = self.episode
+
+        reuse_pack_enabled = control.getBool('smartplay.reuse_season_pack', default=True)
+        match_quality_enabled = control.getBool('smartplay.match_quality', default=True)
+        prefer_embed_enabled = control.getBool('smartplay.prefer_same_embed', default=True)
+
         import re
-        if len(sources) > 1 and not self.source_select:
-            lp = control.getSetting('last_played_source') or ''
-            # remove any [HASH] blocks (e.g. [E5A85899])
-            lp = re.sub(r'\[[0-9A-Fa-f]{8,}\]', '', lp).strip()
+        lp_clean = re.sub(r'\[[0-9A-Fa-f]{8,}\]', '', lp_str).strip()
+        L = len(target_ep)
+        digit_positions = [
+            i for i in range(len(lp_clean) - L + 1)
+            if lp_clean[i:i + L].isdigit()
+        ]
 
-            ep = str(self.episode)
-            L = len(ep)
+        def _score(source):
+            score = 0
+            s_type = source.get('type', '')
+            s_provider = source.get('provider', '')
+            s_debrid = source.get('debrid_provider', '')
+            s_quality = source.get('quality', 0)
+            s_title = str(source.get('release_title', ''))
+            s_info = source.get('info', [])
+            s_hash = source.get('hash', '')
+            s_lang = source.get('lang', '')
 
-            # 1) Precompute all offsets where exactly L digits occur in a row
-            digit_positions = [
-                i for i in range(len(lp) - L + 1)
-                if lp[i:i + L].isdigit()
-            ]
+            # 1. Season Pack Continuity (Highest Priority)
+            if reuse_pack_enabled:
+                if last_meta and last_meta.get('is_season_pack') and last_meta.get('hash') and s_hash == last_meta.get('hash'):
+                    score += 100000
+                elif source_utils.is_season_pack(source):
+                    if source_utils.season_pack_covers_episode(source, target_ep_int):
+                        score += 50000
 
-            for idx, source in enumerate(sources):
-                # embed/direct-style
-                if source['type'] in ['embed', 'direct']:
-                    key = source['provider'] + " " + " ".join(map(str, source['info']))
-                    if key == lp:
-                        sources[0], sources[idx] = sources[idx], sources[0]
-                        break
+            # 2. Embed Continuity
+            if s_type in ['embed', 'direct']:
+                last_is_embed = (last_meta and last_meta.get('type') in ['embed', 'direct']) or (
+                    lp_str and not any(ext in lp_str.lower() for ext in ('.mkv', '.mp4', '1080p', '720p', '4k'))
+                )
+                if last_is_embed and prefer_embed_enabled:
+                    last_provider = last_meta.get('provider') if last_meta else lp_str.split(' ')[0]
+                    if s_provider and last_provider and s_provider.lower() == last_provider.lower():
+                        score += 25000
+                    last_info = last_meta.get('info', []) if last_meta else lp_str.split(' ')[1:]
+                    if any(tag in s_info for tag in ('SUB', 'DUB', 'SOFT-SUB')) and any(tag in last_info for tag in ('SUB', 'DUB', 'SOFT-SUB')):
+                        if any(tag in s_info and tag in last_info for tag in ('SUB', 'DUB', 'SOFT-SUB')):
+                            score += 5000
+                    if last_meta and last_meta.get('lang') and s_lang == last_meta.get('lang'):
+                        score += 2000
 
-                # torrent-style
-                elif source['type'] in ['torrent', 'torrent (uncached)', 'cloud', 'hoster', 'local']:
-                    rel = str(source['release_title'])
-                    # strip hashes from the release title too
-                    rel = re.sub(r'\[[0-9A-Fa-f]{8,}\]', '', rel).strip()
+            # 3. Torrent / Single Episode Continuity
+            elif s_type in ['torrent', 'torrent (uncached)', 'cloud', 'hoster', 'local']:
+                last_is_torrent = (last_meta and last_meta.get('type') not in ['embed', 'direct']) or not (last_meta or s_type in ['embed', 'direct'])
+                if last_is_torrent:
+                    # Release Group Matching
+                    s_group = source_utils.extract_release_group(s_title)
+                    last_group = last_meta.get('release_group', '') if last_meta else source_utils.extract_release_group(lp_clean)
+                    if s_group and last_group and s_group == last_group:
+                        score += 20000
 
-                    # 2) exact match fallback
-                    if rel == lp:
-                        sources[0], sources[idx] = sources[idx], sources[0]
-                        break
+                    # Sequential Title Matching (Episode pattern replacement)
+                    clean_rel = re.sub(r'\[[0-9A-Fa-f]{8,}\]', '', s_title).strip()
+                    if clean_rel == lp_clean:
+                        score += 35000
+                    else:
+                        for pos in digit_positions:
+                            if clean_rel.startswith(lp_clean[:pos]) and clean_rel.endswith(lp_clean[pos + L:]):
+                                score += 30000
+                                break
 
-                    # 3) try each digit-run position
-                    for pos in digit_positions:
-                        if rel.startswith(lp[:pos]) and rel.endswith(lp[pos + L:]):
-                            sources[0], sources[idx] = sources[idx], sources[0]
-                            idx = None
-                            break
-                    if idx is None:
-                        break
+                    # Quality Matching
+                    if match_quality_enabled:
+                        last_qual = last_meta.get('quality') if last_meta else None
+                        if last_qual is not None:
+                            if s_quality == last_qual:
+                                score += 10000  # Exact quality match
+                            elif s_quality > last_qual:
+                                score += 2000   # Prefer higher over lower quality
 
-        return sources
+                    # Debrid Provider Matching
+                    if last_meta and last_meta.get('debrid_provider') and s_debrid == last_meta.get('debrid_provider'):
+                        score += 5000
+
+                    # Audio Flavor Matching (Dual-Audio / Dub)
+                    last_info = last_meta.get('info', []) if last_meta else []
+                    if any(tag in s_info and tag in last_info for tag in ('DUAL-AUDIO', 'DUB', 'MULTI-AUDIO')):
+                        score += 3000
+
+                    # Cached over Uncached
+                    if 'uncached' not in s_type:
+                        score += 500
+
+            return score
+
+        return sorted(sources, key=_score, reverse=True)
 
     def resolve(self, sources):
-        """Optimized resolve with sequential stream failover and smart retry"""
+        """Optimized resolve with sequential stream failover, smart retry, and automatic rescrape fallback"""
         for idx, i in enumerate(sources):
             self.return_data['source'] = i
             if self.canceled:
@@ -177,18 +234,41 @@ class Resolver(BaseWindow):
                         ffprobe_chapters.attach_to_linkinfo(self.return_data['linkinfo'])
                         if self._handle_playback():
                             return
-                        elif control.getBool('general.autotrynext') and not self.canceled and (idx + 1 < len(sources)):
-                            control.notify(control.ADDON_NAME, "Playback failed on source, trying next candidate...", time=3000, sound=False)
-                            self.return_data = {'linkinfo': None, 'sub': None, 'source': None}
-                            continue
                         else:
-                            break
+                            if source_utils.is_season_pack(i):
+                                database.clear_season_pack(self.mal_id, self.season)
+                            if control.getBool('general.autotrynext', default=True) and not self.canceled and (idx + 1 < len(sources)):
+                                control.notify(control.ADDON_NAME, "Playback failed on source, trying next candidate...", time=3000, sound=False)
+                                self.return_data = {'linkinfo': None, 'sub': None, 'source': None}
+                                continue
+                            else:
+                                break
                     else:
                         ffprobe_chapters.attach_to_linkinfo(self.return_data['linkinfo'])
                         break
                 else:
                     control.log(f"Resolver: candidate {i.get('provider')} failed prefetch/verification, advancing to next candidate", level='warning')
+                    if source_utils.is_season_pack(i):
+                        database.clear_season_pack(self.mal_id, self.season)
                     self.return_data['link'] = None
+            else:
+                if source_utils.is_season_pack(i):
+                    database.clear_season_pack(self.mal_id, self.season)
+
+        # Smart failover: if all initial candidates failed and not canceled, rescan fresh sources
+        if not self.return_data.get('linkinfo') and not self.canceled and not getattr(self, '_fallback_attempted', False):
+            self._fallback_attempted = True
+            control.notify(control.ADDON_NAME, "Primary source unavailable, scanning fresh sources...", time=3000, sound=False)
+            control.log(f"Resolver: All initial candidates failed for {self.mal_id} ep {self.episode}, rescanning fresh sources...", level='info')
+            from resources.lib import MetaBrowser
+            fresh_sources = MetaBrowser.get_sources(self.mal_id, self.episode, 'show', rescrape=True, source_select=False, silent=self.silent)
+            if fresh_sources:
+                failed_hashes = {s.get('hash') for s in sources if s.get('hash')}
+                usable_fresh = [s for s in fresh_sources if s.get('hash') not in failed_hashes]
+                if not usable_fresh:
+                    usable_fresh = fresh_sources
+                usable_fresh = self.reorder_sources(usable_fresh)
+                return self.resolve(usable_fresh)
 
         if not self.return_data.get('linkinfo'):
             self.return_data = False
@@ -303,6 +383,12 @@ class Resolver(BaseWindow):
 
         if playback_ok:
             self.close()
+            current_src = self.return_data.get('source', {})
+            if current_src:
+                database.save_last_played_source(self.mal_id, current_src)
+                if control.getBool('smartplay.reuse_season_pack', default=True) and source_utils.is_season_pack(current_src):
+                    database.set_season_pack(self.mal_id, self.season, current_src)
+                    control.log(f"Resolver: Cached season pack for {self.mal_id} season {self.season}: {current_src.get('release_title')}", level='info')
             link_info = self.return_data.get('linkinfo') or {}
             ch = link_info.get('chapters') if isinstance(link_info, dict) else None
             player.WatchlistPlayer().handle_player(
@@ -518,6 +604,10 @@ class Resolver(BaseWindow):
             self.setProperty('source_type', self.sources[0]['type'])
             self.setProperty('source_size', self.sources[0]['size'])
             self.setProperty('source_seeders', str(self.sources[0].get('seeders', '')))
+
+            database.save_last_played_source(self.mal_id, self.sources[0])
+            if control.getBool('smartplay.reuse_season_pack', default=True) and source_utils.is_season_pack(self.sources[0]):
+                database.set_season_pack(self.mal_id, self.season, self.sources[0])
 
             if self.sources[0]['type'] in ['embed', 'direct']:
                 control.setSetting('last_played_source', str(self.sources[0]['provider']) + " " + " ".join(map(str, self.sources[0]['info'])))

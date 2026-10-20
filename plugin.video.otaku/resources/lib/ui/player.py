@@ -219,12 +219,24 @@ class WatchlistPlayer(player):
         next_ep = current_ep + 1
         mal_id = self.mal_id
 
+        # Check if season pack continuity is active and already covers next_ep
+        if control.getBool('smartplay.reuse_season_pack', default=True):
+            episode_data = database.get_episode(mal_id)
+            season = episode_data.get('season', 1) if episode_data else 1
+            cached_pack = database.get_season_pack(mal_id, season)
+            if cached_pack and source_utils.season_pack_covers_episode(cached_pack, next_ep, len(self.episodes)):
+                control.log(f"Pre-scraping: Episode {next_ep} already covered by cached season pack: {cached_pack.get('release_title')}", level='info')
+                return
+
         def _worker():
             try:
                 control.log(f"Pre-scraping next episode (mal_id={mal_id}, ep={next_ep}) in background...", level='info')
                 from resources.lib import MetaBrowser
-                MetaBrowser.get_sources(mal_id, next_ep, 'show', rescrape=False, source_select=False, silent=True)
-                control.log(f"Pre-scraping next episode (mal_id={mal_id}, ep={next_ep}) completed and cached.", level='info')
+                sources = MetaBrowser.get_sources(mal_id, next_ep, 'show', rescrape=False, source_select=False, silent=True)
+                if sources:
+                    control.log(f"Pre-scraping next episode (mal_id={mal_id}, ep={next_ep}) finished: {len(sources)} sources cached.", level='info')
+                else:
+                    control.log(f"Pre-scraping next episode (mal_id={mal_id}, ep={next_ep}) returned no sources.", level='warning')
             except Exception as e:
                 control.log(f"Pre-scraping ep {next_ep} error: {e}", level='warning')
 

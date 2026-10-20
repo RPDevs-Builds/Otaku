@@ -771,3 +771,106 @@ def user_select(files, dict_key):
 def get_embedhost(url):
     s = re.search(r'(?://|\.)([^.]+)\.', url)
     return s.group(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Season Pack & Release Group Detection
+# ═══════════════════════════════════════════════════════════════════════════
+
+_EPISODE_RANGE_RE = re.compile(
+    r'(?:ep|eps|episode|e)?\s*(\d{1,4})\s*(?:-|~|–|—)\s*(?:ep|eps|episode|e)?\s*(\d{1,4})',
+    re.IGNORECASE
+)
+
+_RELEASE_GROUP_RE = re.compile(
+    r'^\s*[\[\(]([a-zA-Z0-9_\-\.\s]+?)[\]\)]'
+)
+
+_NON_GROUP_TAGS = frozenset({
+    '1080p', '720p', '4k', '2160p', '480p', 'hevc', 'x264', 'x265', 'batch',
+    'complete', 'dual-audio', 'multi-audio', 'dub', 'sub', 'remux', 'bluray',
+    'bdrip', 'webrip', 'web-dl', 'webdl', 'flac', 'aac'
+})
+
+
+def extract_episode_range(release_title):
+    """
+    Extract (start_ep, end_ep) tuple from a release title if an episode range is present.
+    Returns (int, int) or None.
+    """
+    if not release_title:
+        return None
+    for m in _EPISODE_RANGE_RE.finditer(release_title):
+        try:
+            s_val, e_val = int(m.group(1)), int(m.group(2))
+            if 1900 <= s_val <= 2100 and 1900 <= e_val <= 2100:
+                continue
+            if s_val < e_val and (e_val - s_val) < 2000:
+                return s_val, e_val
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def is_season_pack(source):
+    """
+    Determine whether a source represents a season pack / batch torrent.
+    """
+    if not isinstance(source, dict):
+        return False
+    if source.get('package') is True or source.get('is_pack') is True:
+        return True
+    if 'BATCH' in source.get('info', []):
+        return True
+    title = source.get('release_title', '')
+    if not title:
+        return False
+    if extract_episode_range(title) is not None:
+        return True
+    lower = title.lower()
+    if any(k in lower for k in ('batch', 'complete series', 'complete season', 'entire series', 'all episodes')):
+        return True
+    if re.search(r'\b(?:season\s*\d+|s\d{1,2})\b', lower) and not re.search(r'\b(?:e|ep|episode)\s*\d{1,4}\b', lower):
+        return True
+    return False
+
+
+def season_pack_covers_episode(source, episode_num, total_episodes=None):
+    """
+    Check if a season pack source covers a specific episode number.
+    """
+    if not is_season_pack(source):
+        return False
+    try:
+        ep_int = int(episode_num)
+    except (ValueError, TypeError):
+        return False
+
+    title = source.get('release_title', '')
+    r = extract_episode_range(title)
+    if r is not None:
+        start, end = r
+        return start <= ep_int <= end
+
+    if total_episodes:
+        try:
+            return 1 <= ep_int <= int(total_episodes)
+        except (ValueError, TypeError):
+            pass
+    return ep_int >= 1
+
+
+def extract_release_group(release_title):
+    """
+    Extract the release group from an anime release title (e.g., '[SubsPlease]' -> 'subsplease').
+    Returns lowercase group name or empty string.
+    """
+    if not release_title:
+        return ''
+    m = _RELEASE_GROUP_RE.match(release_title)
+    if m:
+        group = m.group(1).strip()
+        if group.lower() not in _NON_GROUP_TAGS:
+            return group.lower()
+    return ''
+

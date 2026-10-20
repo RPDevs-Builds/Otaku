@@ -1,4 +1,9 @@
 Changelog v5.3.4 (2026-10-18):
+- SmartPlay: Season pack continuity caching with instant fast-path playback for subsequent episodes without rescraping
+- SmartPlay: Multi-tier scoring engine prioritizing matching quality, release group, and embed provider continuity
+- SmartPlay: Pre-scraping optimization checking season pack coverage to eliminate redundant background scraper execution
+- SmartPlay: Smart playback failover that purges broken season packs, advances candidates, and rescans on failure
+- Settings: Added user toggles for season pack reuse, quality/group matching, and same-embed preference
 - Otaku browser: fixed Airing Last, This, and Next season tabs (season query casing for the metadata API)
 - AnimePahe: fail soft when the search API returns no data; fixed invalid-JSON exception handling
 - MegaPlay: decrypt encrypted embed sources when the API no longer returns a plain file URL
