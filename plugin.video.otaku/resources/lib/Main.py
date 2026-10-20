@@ -1937,6 +1937,45 @@ def REBUILD_DATABASE(payload, params):
     SyncDatabase().re_build_database()
 
 
+@Route('database_stats')
+def DATABASE_STATS(payload, params):
+    stats = database.get_database_stats()
+    control.textviewer_dialog('Otaku Database & Storage Telemetry', stats)
+
+
+@Route('vacuum_databases')
+def VACUUM_DATABASES(payload, params):
+    reclaimed = database.vacuum_all_databases()
+    reclaimed_str = database._format_db_bytes(reclaimed)
+    control.notify(
+        f'{control.ADDON_NAME}: Database',
+        f'Databases optimized. Reclaimed {reclaimed_str}',
+        time=5000, sound=False)
+
+
+@Route('check_db_integrity')
+def CHECK_DB_INTEGRITY(payload, params):
+    all_ok, results = database.check_database_integrity()
+    if all_ok:
+        control.notify(
+            f'{control.ADDON_NAME}: Database Integrity',
+            'Integrity check passed. All databases healthy.',
+            time=5000, sound=False)
+    else:
+        err_msg = "\n".join([f"• {name}: {status}" for name, status in results.items()])
+        control.textviewer_dialog('Database Integrity Issues Found', err_msg)
+
+
+@Route('sync_mappings')
+def SYNC_MAPPINGS(payload, params):
+    import service
+    service.update_mappings_db()
+    control.notify(
+        f'{control.ADDON_NAME}: Mappings',
+        'Anime ID Mappings successfully updated',
+        time=5000, sound=False)
+
+
 @Route('wipe_addon_data')
 def WIPE_ADDON_DATA(payload, params):
     control.clear_settings()

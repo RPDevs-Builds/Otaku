@@ -40,7 +40,22 @@ from urllib import parse
 # ═══════════════════════════════════════════════════════════════════════════
 
 _artwork_cache = {}
-max_threads = os.cpu_count()
+
+
+def get_max_threads():
+    try:
+        val = getInt('scraper.concurrency.workers')
+        if val > 0:
+            return val
+    except Exception:
+        pass
+    return max(os.cpu_count() or 4, 8)
+
+
+def __getattr__(name):
+    if name == 'max_threads':
+        return get_max_threads()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 try:
     HANDLE = int(sys.argv[1])
@@ -799,7 +814,7 @@ def bulk_dir_list(video_data, bulk_add=True):
         bulk_prefs['fanart_mal_ids'] = getStringList('fanart.mal_ids')
         bulk_prefs['fanart_selections'] = getStringList('fanart.selections')
     mapfunc = partial(_dir_list_item_worker, bulk_add=bulk_add, bulk_prefs=bulk_prefs)
-    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+    with ThreadPoolExecutor(max_workers=get_max_threads()) as executor:
         list_items = list(executor.map(mapfunc, filter(None, video_data)))
     return list_items
 

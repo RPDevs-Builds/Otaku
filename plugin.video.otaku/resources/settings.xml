@@ -983,6 +983,18 @@
 						<heading>30185</heading>
 					</control>
 				</setting>
+				<setting id="scraper.concurrency.workers" type="integer" label="30508" help="">
+					<level>0</level>
+					<default>8</default>
+					<constraints>
+						<minimum>2</minimum>
+						<step>1</step>
+						<maximum>16</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
 				<!-- <setting id="general.fuzzy" type="integer" label="30321" help="30322">
 					<level>0</level>
 					<default>40</default>
@@ -1077,10 +1089,10 @@
 			</group>
 		</category>
 
-		<!-- Cache -->
+		<!-- Cache & Database -->
 		<category id="Cache" label="30086" help="">
-			<!-- Cache Settings -->
-			<group id="1" label="30489" help="">
+			<!-- Cache Actions -->
+			<group id="1" label="30496" help="">
 				<setting id="clear_cache_all" type="action" label="30490" help="">
 					<level>0</level>
 					<data>RunPlugin(plugin://plugin.video.otaku/clear_cache?setting=true)</data>
@@ -1109,6 +1121,10 @@
 						<close>true</close>
 					</control>
 				</setting>
+			</group>
+
+			<!-- Cache Duration (TTL) -->
+			<group id="2" label="30497" help="">
 				<setting id="general.kodi.cache" type="boolean" label="30459" help="">
 					<level>0</level>
 					<default>true</default>
@@ -1163,6 +1179,90 @@
 					</control>
 				</setting>
 			</group>
+
+			<!-- Database Maintenance -->
+			<group id="3" label="30498" help="">
+				<setting id="database_stats" type="action" label="30500" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/database_stats?setting=true)</data>
+					<control type="button" format="action">
+						<close>false</close>
+					</control>
+				</setting>
+				<setting id="vacuum_databases" type="action" label="30501" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/vacuum_databases?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="check_db_integrity" type="action" label="30502" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/check_db_integrity?setting=true)</data>
+					<control type="button" format="action">
+						<close>false</close>
+					</control>
+				</setting>
+				<setting id="sync_mappings" type="action" label="30503" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/sync_mappings?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="rebuild_database_cache_tab" type="action" label="30075" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/rebuild_database?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+			</group>
+
+			<!-- Advanced SQLite Engine PRAGMAs -->
+			<group id="4" label="30499" help="">
+				<setting id="db.sqlite.cache_size_mb" type="integer" label="30504" help="">
+					<level>1</level>
+					<default>16</default>
+					<constraints>
+						<minimum>2</minimum>
+						<step>2</step>
+						<maximum>64</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="db.sqlite.mmap_size_mb" type="integer" label="30505" help="">
+					<level>1</level>
+					<default>32</default>
+					<constraints>
+						<minimum>0</minimum>
+						<step>16</step>
+						<maximum>256</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="db.sqlite.synchronous" type="string" label="30506" help="">
+					<level>1</level>
+					<default>1</default>
+					<constraints>
+						<options>
+							<option label="OFF">0</option>
+							<option label="NORMAL">1</option>
+							<option label="FULL">2</option>
+						</options>
+					</constraints>
+					<control type="spinner" format="string"/>
+				</setting>
+				<setting id="db.sqlite.temp_store_ram" type="boolean" label="30507" help="">
+					<level>1</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
+			</group>
 		</category>
 
 		<!-- Playback -->
@@ -1198,6 +1298,11 @@
 						<dependency type="enable" setting="general.smartplay">false</dependency>
 					</dependencies>
 					<control type="spinner" format="string"/>
+				</setting>
+				<setting id="interface.source_select.badges" type="boolean" label="30509" help="">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
 				</setting>
 			</group>
 

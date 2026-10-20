@@ -18,6 +18,7 @@ Maintenance  - Cache clearing helpers
 
 import ast
 import hashlib
+import os
 import pickle
 import re
 import time
@@ -57,15 +58,55 @@ class SQL:
         self.timeout = timeout
 
     def __enter__(self):
-        if not xbmcvfs.exists(control.dataPath):
-            xbmcvfs.mkdirs(control.dataPath)
+        dir_name = os.path.dirname(self.path) or control.dataPath
+        if dir_name and not os.path.exists(dir_name):
+            try:
+                os.makedirs(dir_name, exist_ok=True)
+            except Exception:
+                pass
         try:
             self._conn = dbapi2.connect(self.path, timeout=self.timeout, isolation_level=None)
             self._conn.row_factory = _dict_factory
+
+            # Dynamic SQLite Engine PRAGMAs (Settings -> Cache & Database)
+            cache_size_mb = 16
+            mmap_size_mb = 32
+            sync_val = 'NORMAL'
+            temp_store_ram = True
+            try:
+                c_mb = control.getInt('db.sqlite.cache_size_mb')
+                if c_mb > 0:
+                    cache_size_mb = c_mb
+            except Exception:
+                pass
+
+            try:
+                m_mb = control.getInt('db.sqlite.mmap_size_mb')
+                if m_mb >= 0:
+                    mmap_size_mb = m_mb
+            except Exception:
+                pass
+
+            try:
+                sync_mode = control.getSetting('db.sqlite.synchronous') or '1'
+                sync_map = {'0': 'OFF', '1': 'NORMAL', '2': 'FULL'}
+                sync_val = sync_map.get(str(sync_mode), 'NORMAL')
+            except Exception:
+                pass
+
+            try:
+                temp_store_ram = control.getBool('db.sqlite.temp_store_ram')
+            except Exception:
+                pass
+
             self._conn.execute("PRAGMA foreign_keys = ON")
-            self._conn.execute("PRAGMA synchronous = OFF")
+            self._conn.execute(f"PRAGMA synchronous = {sync_val}")
             self._conn.execute("PRAGMA journal_mode = WAL")
-            self._conn.execute("PRAGMA mmap_size = 268435456")
+            self._conn.execute(f"PRAGMA cache_size = -{cache_size_mb * 1024}")
+            self._conn.execute(f"PRAGMA mmap_size = {mmap_size_mb * 1024 * 1024}")
+            if temp_store_ram:
+                self._conn.execute("PRAGMA temp_store = MEMORY")
+
             self._cursor = self._conn.cursor()
             return self._cursor
         except Exception:
@@ -342,6 +383,203 @@ def cache_clear_metadata():
     control.notify(
         f'{control.ADDON_NAME}: Metadata Cache',
         'Metadata cache successfully cleared', time=5000, sound=False)
+
+
+def cache_clear_show(mal_id):
+    """Purge all cached scraper and metadata entries relating to a specific show."""
+    with SQL(control.cacheFile) as cur:
+        cur.execute("DELETE FROM cache WHERE key LIKE ?", (f'%{mal_id}%',))
+        cur.connection.commit()
+    control.notify(
+        f'{control.ADDON_NAME}: Show Cache',
+        f'Cache for anime ID {mal_id} cleared', time=4000, sound=False)
+
+
+def _format_db_bytes(size=0):
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024.0 or unit == 'GB':
+            return f"{size:.1f} {unit}" if unit != 'B' else f"{int(size)} B"
+        size /= 1024.0
+    return f"{size:.1f} GB"
+
+
+def get_database_stats():
+    """Gather diagnostic telemetry across all Otaku SQLite databases."""
+    stats = []
+    total_size = 0
+
+    dbs = [
+        ('Cache Database', control.cacheFile, 'cache.db'),
+        ('Shows & Episodes DB', control.malSyncDB, 'malSync.db'),
+        ('Anime ID Mappings DB', control.mappingDB, 'mappings.db'),
+        ('Search History DB', control.searchHistoryDB, 'search.db')
+    ]
+
+    for label, path, filename in dbs:
+        size_bytes = 0
+        exists = os.path.exists(path)
+        if exists:
+            try:
+                size_bytes = os.path.getsize(path)
+                total_size += size_bytes
+            except OSError:
+                pass
+
+        details = []
+        if exists:
+            try:
+                with SQL(path) as cur:
+                    if filename == 'cache.db':
+                        try:
+                            cur.execute("SELECT count(*) as count FROM cache WHERE key NOT LIKE '%Browser.%'")
+                            row = cur.fetchone()
+                            if row:
+                                details.append(f"{row['count']} scraper/API items")
+                        except Exception:
+                            pass
+                        try:
+                            cur.execute("SELECT count(*) as count FROM cache WHERE key LIKE '%Browser.%'")
+                            row = cur.fetchone()
+                            if row:
+                                details.append(f"{row['count']} metadata items")
+                        except Exception:
+                            pass
+                        try:
+                            cur.execute("SELECT count(*) as count FROM debrid_cache")
+                            row = cur.fetchone()
+                            if row:
+                                details.append(f"{row['count']} debrid hashes")
+                        except Exception:
+                            pass
+                    elif filename == 'malSync.db':
+                        try:
+                            cur.execute("SELECT count(*) as count FROM shows")
+                            row = cur.fetchone()
+                            if row:
+                                details.append(f"{row['count']} shows")
+                        except Exception:
+                            pass
+                        try:
+                            cur.execute("SELECT count(*) as count FROM episodes")
+                            row = cur.fetchone()
+                            if row:
+                                details.append(f"{row['count']} episodes")
+                        except Exception:
+                            pass
+                    elif filename == 'mappings.db':
+                        try:
+                            cur.execute("SELECT count(*) as count FROM anime")
+                            row = cur.fetchone()
+                            if row:
+                                details.append(f"{row['count']} mappings")
+                        except Exception:
+                            pass
+                    elif filename == 'search.db':
+                        try:
+                            cur.execute("SELECT count(*) as count FROM history")
+                            row = cur.fetchone()
+                            if row:
+                                details.append(f"{row['count']} queries")
+                        except Exception:
+                            pass
+            except Exception as e:
+                details.append(f"read error: {e}")
+
+        detail_str = f" ({', '.join(details)})" if details else ""
+        stats.append(f"• {label:<22} : {_format_db_bytes(size_bytes):>9}{detail_str}")
+
+    # PRAGMA telemetry
+    pragma_info = []
+    try:
+        with SQL(control.cacheFile) as cur:
+            cur.execute("PRAGMA journal_mode")
+            r = cur.fetchone()
+            if r:
+                pragma_info.append(f"Journal: {r.get('journal_mode', '').upper()}")
+            cur.execute("PRAGMA synchronous")
+            r = cur.fetchone()
+            if r:
+                sync_map = {'0': 'OFF', '1': 'NORMAL', '2': 'FULL'}
+                pragma_info.append(f"Sync: {sync_map.get(str(r.get('synchronous', '')), str(r.get('synchronous', '')))}")
+            cur.execute("PRAGMA cache_size")
+            r = cur.fetchone()
+            if r:
+                c_val = r.get('cache_size', 0)
+                pragma_info.append(f"Cache: {abs(int(c_val)) // 1024 if c_val < 0 else abs(int(c_val)) * 4 // 1024} MB")
+            cur.execute("PRAGMA mmap_size")
+            r = cur.fetchone()
+            if r:
+                pragma_info.append(f"MMAP: {int(r.get('mmap_size', 0)) // (1024 * 1024)} MB")
+    except Exception:
+        pass
+
+    pragma_str = " | ".join(pragma_info) if pragma_info else "Default"
+
+    # Integrity summary
+    healthy, _ = check_database_integrity()
+    integrity_status = "All databases healthy (OK)" if healthy else "Warning: integrity issues detected"
+
+    output = [
+        "Otaku Database & Storage Telemetry",
+        "═" * 58,
+        "\n".join(stats),
+        "─" * 58,
+        f"• Total Storage Used   : {_format_db_bytes(total_size):>9}",
+        f"• Active SQLite Mode   : {pragma_str}",
+        f"• Database Integrity   : {integrity_status}",
+        "═" * 58
+    ]
+    return "\n".join(output)
+
+
+def check_database_integrity():
+    """Run PRAGMA integrity_check on all 4 Otaku SQLite databases."""
+    dbs = [
+        ('cache.db', control.cacheFile),
+        ('malSync.db', control.malSyncDB),
+        ('mappings.db', control.mappingDB),
+        ('search.db', control.searchHistoryDB)
+    ]
+    all_ok = True
+    results = {}
+    for name, path in dbs:
+        if os.path.exists(path):
+            try:
+                with SQL(path) as cur:
+                    cur.execute("PRAGMA integrity_check")
+                    rows = cur.fetchall()
+                    if rows and rows[0].get('integrity_check') == 'ok':
+                        results[name] = 'OK'
+                    else:
+                        all_ok = False
+                        results[name] = f"Issue: {rows}"
+            except Exception as e:
+                all_ok = False
+                results[name] = f"Error: {e}"
+        else:
+            results[name] = 'Not created yet'
+    return all_ok, results
+
+
+def vacuum_all_databases():
+    """Run PRAGMA optimize and VACUUM across all Otaku SQLite databases."""
+    dbs = [control.cacheFile, control.malSyncDB, control.mappingDB, control.searchHistoryDB]
+    bytes_before = 0
+    bytes_after = 0
+
+    for path in dbs:
+        if os.path.exists(path):
+            try:
+                bytes_before += os.path.getsize(path)
+                with SQL(path) as cur:
+                    cur.execute("PRAGMA optimize")
+                    cur.execute("VACUUM")
+                bytes_after += os.path.getsize(path)
+            except Exception as e:
+                control.log(f"Failed to vacuum {path}: {e}", level='warning')
+
+    reclaimed = max(0, bytes_before - bytes_after)
+    return reclaimed
 
 
 # ═══════════════════════════════════════════════════════════════════════════

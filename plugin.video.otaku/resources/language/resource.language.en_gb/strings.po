@@ -368,7 +368,7 @@ msgid ""
 msgstr ""
 
 msgctxt "#30086"
-msgid "Cache"
+msgid "Cache & Database"
 msgstr ""
 
 msgctxt "#30087"
@@ -1999,4 +1999,60 @@ msgstr ""
 
 msgctxt "#30495"
 msgid "Clear Metadata Cache Only"
+msgstr ""
+
+msgctxt "#30496"
+msgid "Cache Actions"
+msgstr ""
+
+msgctxt "#30497"
+msgid "Cache Duration (TTL)"
+msgstr ""
+
+msgctxt "#30498"
+msgid "Database Maintenance"
+msgstr ""
+
+msgctxt "#30499"
+msgid "Advanced SQLite Engine PRAGMAs"
+msgstr ""
+
+msgctxt "#30500"
+msgid "Database & Storage Telemetry"
+msgstr ""
+
+msgctxt "#30501"
+msgid "Vacuum & Optimize All Databases"
+msgstr ""
+
+msgctxt "#30502"
+msgid "Verify Database Integrity"
+msgstr ""
+
+msgctxt "#30503"
+msgid "Re-Sync Anime ID Mappings"
+msgstr ""
+
+msgctxt "#30504"
+msgid "SQLite Memory Cache Size (MB)"
+msgstr ""
+
+msgctxt "#30505"
+msgid "SQLite MMAP Memory Limit (MB)"
+msgstr ""
+
+msgctxt "#30506"
+msgid "SQLite Synchronous Mode"
+msgstr ""
+
+msgctxt "#30507"
+msgid "Store Temporary Tables in RAM"
+msgstr ""
+
+msgctxt "#30508"
+msgid "Scraper Concurrency Workers"
+msgstr ""
+
+msgctxt "#30509"
+msgid "Enhanced Source Badges (Color-coded)"
 msgstr ""

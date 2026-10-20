@@ -88,16 +88,75 @@ class SourceSelect(BaseWindow):
     def populate_sources(self, sources):
         self.display_list.reset()
         self.displayed_sources = sources  # Update the displayed sources list
+        badges_enabled = control.getBool('interface.source_select.badges', default=True)
+
         for source in sources:
             if source is None:
                 continue
-            menu_item = xbmcgui.ListItem(source.get('release_title', ''), offscreen=True)
+
+            release_title = source.get('release_title', '')
+            quality = str(source.get('quality', ''))
+            info = source.get('info', [])
+            source_type = source.get('type', '')
+
+            if badges_enabled:
+                badges = []
+                # Quality badge
+                q_upper = quality.upper()
+                if '4K' in q_upper or '2160' in q_upper:
+                    badges.append('[COLOR gold][4K][/COLOR]')
+                elif '1080' in q_upper:
+                    badges.append('[COLOR deepskyblue][1080p][/COLOR]')
+                elif '720' in q_upper:
+                    badges.append('[COLOR springgreen][720p][/COLOR]')
+                elif 'SD' in q_upper or '480' in q_upper:
+                    badges.append('[COLOR darkgray][SD][/COLOR]')
+
+                # Debrid / Source Type badge
+                dp = source.get('debrid_provider')
+                if dp:
+                    if 'Real-Debrid' in dp or 'RD' in dp:
+                        badges.append('[COLOR limegreen][RD][/COLOR]')
+                    elif 'AllDebrid' in dp or 'AD' in dp:
+                        badges.append('[COLOR orange][AD][/COLOR]')
+                    elif 'Premiumize' in dp or 'PM' in dp:
+                        badges.append('[COLOR deepskyblue][PM][/COLOR]')
+                    elif 'TorBox' in dp or 'TB' in dp:
+                        badges.append('[COLOR cyan][TB][/COLOR]')
+                    else:
+                        badges.append(f'[COLOR springgreen][{dp}][/COLOR]')
+                elif source_type in ('embed', 'direct'):
+                    badges.append('[COLOR orchid][EMBED][/COLOR]')
+
+                # Audio / Codec badges from info
+                info_joined = ' '.join(info).upper()
+                if 'DUAL AUDIO' in info_joined or 'DUAL' in info_joined:
+                    badges.append('[COLOR coral][DUAL][/COLOR]')
+                elif 'DUB' in info_joined:
+                    badges.append('[COLOR sandybrown][DUB][/COLOR]')
+
+                if 'HEVC' in info_joined or 'X265' in info_joined or 'H.265' in info_joined:
+                    badges.append('[COLOR magenta][HEVC][/COLOR]')
+                elif 'AV1' in info_joined:
+                    badges.append('[COLOR hotpink][AV1][/COLOR]')
+
+                if '10BIT' in info_joined or '10-BIT' in info_joined:
+                    badges.append('[COLOR aqua][10-bit][/COLOR]')
+
+                if badges:
+                    display_label = f"{' '.join(badges)} {release_title}"
+                else:
+                    display_label = release_title
+            else:
+                display_label = release_title
+
+            menu_item = xbmcgui.ListItem(display_label, offscreen=True)
             properties = {
-                'type': source.get('type', ''),
+                'type': source_type,
                 'debrid_provider': source.get('debrid_provider', ''),
                 'provider': source.get('provider', ''),
-                'quality': str(source.get('quality', '')),
-                'info': ' '.join(source.get('info', [])),
+                'quality': quality,
+                'info': ' '.join(info),
                 'seeders': str(source.get('seeders', '')) if source.get('seeders', -1) != -1 else 'na',
                 'size': source.get('size', '')
             }
