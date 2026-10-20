@@ -544,14 +544,16 @@ def open_anime_statistics(mal_id):
 
 @Route('animes/*')
 def ANIMES_PAGE(payload, params):
-    mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
     anime_general, content = MetaBrowser.get_anime_init(mal_id)
     control.draw_items(anime_general, content)
 
 
 @Route('find_recommendations/*')
 def FIND_RECOMMENDATIONS(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
     page = int(params.get('page', 1))
     items = BROWSER.get_recommendations(mal_id, page)
     control.draw_items(items, 'tvshows')
@@ -562,13 +564,15 @@ def FIND_RECOMMENDATIONS(payload, params):
 
 @Route('find_relations/*')
 def FIND_RELATIONS(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
     control.draw_items(BROWSER.get_relations(mal_id), 'tvshows')
 
 
 @Route('watch_order/*')
 def WATCH_ORDER(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
     control.draw_items(BROWSER.get_watch_order(mal_id), 'tvshows')
 
 
@@ -723,18 +727,29 @@ def WATCH_HISTORY(payload, params):
                     is_playable = True
                     cm.append(('Play Movie', f'PlayMedia(plugin://{control.ADDON_ID}/play_movie/{mal_id}/)'))
                 else:
-                    is_folder = True
-                    is_playable = False
+                    click_action = control.getInt('interface.watchhistory.click')  # 0: open list, 1: play next, 2: resume last
+                    target_ep = last_ep if last_ep else 1
+                    next_ep = (last_ep + 1) if (last_ep is not None and (not episodes or last_ep < episodes)) else (last_ep or 1)
+
+                    if click_action == 1:
+                        base_url = f'play/{mal_id}/{next_ep}'
+                        is_folder = False
+                        is_playable = True
+                    elif click_action == 2:
+                        base_url = f'play/{mal_id}/{target_ep}'
+                        is_folder = False
+                        is_playable = True
+                    else:
+                        base_url = f'watchlist_to_ep/{mal_id}/{target_ep}' if last_ep is not None else f'animes/{mal_id}/'
+                        is_folder = True
+                        is_playable = False
+
                     if last_ep is not None:
-                        base_url = f'watchlist_to_ep/{mal_id}/{last_ep}'
-                        next_ep = (last_ep + 1) if (not episodes or last_ep < episodes) else last_ep
                         cm.append((f'Play Next Episode (Ep {next_ep})', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/{next_ep})'))
                         cm.append((f'Resume Episode {last_ep}', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/{last_ep})'))
                     else:
-                        base_url = f'animes/{mal_id}/'
                         cm.append(('Play Episode 1', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/1)'))
 
-                    target_ep = last_ep if last_ep else 1
                     cm.append(('Browse Episodes', f'Container.Update(plugin://{control.ADDON_ID}/watchlist_to_ep/{mal_id}/{target_ep})'))
 
                 cm.append(('Remove from Watch History', f'RunPlugin(plugin://{control.ADDON_ID}/remove_watch_history/{mal_id})'))
@@ -799,6 +814,8 @@ def AIRING_CALENDAR(payload: str, params: dict):
 
         from resources.lib.windows.anichart import Anichart
         Anichart('anichart.xml', control.ADDON_PATH, calendar=formatted_calendar).doModal()
+    else:
+        control.notify(control.ADDON_NAME, 'Unable to load Airing Calendar data')
     control.exit_code()
 
 
@@ -934,7 +951,9 @@ def GENRES(payload, params):
         'genres_ona//': ('ona', 'ONA'),
         'genres_music//': ('music', 'MUSIC')
     }
-    genres, tags = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    genres = parts[0] if parts else ''
+    tags = parts[1] if len(parts) > 1 else ''
     page = int(params.get('page', 1))
     format = None
     base_key = plugin_url.split('/', 1)[0] + '//'
@@ -1207,7 +1226,9 @@ def SEARCH(payload, params):
 
 @Route('play/*')
 def PLAY(payload, params):
-    mal_id, episode = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
+    episode = parts[1] if len(parts) > 1 else '1'
     source_select = bool(params.get('source_select'))
     rescrape = bool(params.get('rescrape'))
     last_played = control.getSetting('last_played_source')
@@ -1311,7 +1332,9 @@ def PLAY(payload, params):
 
 @Route('play_movie/*')
 def PLAY_MOVIE(payload, params):
-    mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
+    eps_watched = parts[1] if len(parts) > 1 else '0'
     source_select = bool(params.get('source_select'))
     rescrape = bool(params.get('rescrape'))
     resume = params.get('resume')
@@ -1608,24 +1631,33 @@ def MARKED_AS_WATCHED(payload, params):
     from resources.lib.WatchlistIntegration import watchlist_update_episode
     import service
 
-    payload_list = payload.split("/")
-    if len(payload_list) == 2 and payload_list[1]:
-        mal_id, episode = payload_list
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) >= 2:
+        mal_id, episode = parts[0], parts[1]
+    elif parts:
+        mal_id, episode = parts[0], 1
     else:
-        mal_id = payload_list[0] if payload_list else ""
-        episode = 1
+        mal_id, episode = "", 1
 
     any_completed = watchlist_update_episode(mal_id, episode)
     if any_completed:
         control.sleep(3000)
         service.sync_watchlist(True)
 
+    # Synchronize Watch History
+    if mal_id:
+        try:
+            ep_int = int(episode) if str(episode).isdigit() else 1
+            save_to_watch_history(mal_id, ep_int)
+        except Exception as e:
+            control.log(f"Error saving to watch history: {e}", "warning")
+
     # Build notification showing updated watchlists
     enabled = control.enabled_watchlists()
     flavor_labels = {'anilist': 'AniList', 'kitsu': 'Kitsu', 'mal': 'MAL', 'simkl': 'Simkl'}
     updated_names = ', '.join([flavor_labels.get(f, f.capitalize()) for f in enabled]) if enabled else 'No Watchlist'
 
-    if len(payload_list) == 2 and payload_list[1]:
+    if len(parts) >= 2:
         control.notify(control.ADDON_NAME, f'Episode #{episode} was Marked as Watched in {updated_names}')
         control.execute(f'ActivateWindow(Videos,plugin://{control.ADDON_ID}/watchlist_to_ep/{mal_id}/{episode})')
     else:
@@ -1640,7 +1672,8 @@ def MARKED_AS_WATCHED(payload, params):
 
 @Route('delete_anime_database/*')
 def DELETE_ANIME_DATABASE(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
     database.remove_from_database('shows', mal_id)
     database.remove_from_database('episodes', mal_id)
     database.remove_from_database('show_data', mal_id)
@@ -1686,7 +1719,8 @@ def REFRESH(payload, params):
 
 @Route('fanart_select/*')
 def FANART_SELECT(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
     if not (episode := database.get_episode(mal_id)):
         MetaBrowser.get_anime_init(mal_id)
         episode = database.get_episode(mal_id)
@@ -1698,7 +1732,9 @@ def FANART_SELECT(payload, params):
 
 @Route('fanart/*')
 def FANART(payload: str, params: dict):
-    mal_id, select = payload.rsplit('/', 1)
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
+    select = parts[1] if len(parts) > 1 else '0'
     episode = database.get_episode(mal_id)
     fanart = pickle.loads(episode['kodi_meta'])['image']['fanart'] or []
     fanart_display = fanart + ["None", "Random"]

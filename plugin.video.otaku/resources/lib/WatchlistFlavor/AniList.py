@@ -205,7 +205,7 @@ class AniListWLF(WatchlistFlavorBase):
 
     def process_status_view(self, query, variables, next_up, status, offset, page, cache_only=False):
         # Check for remote changes before using cache
-        self._should_refresh_cache()
+        self._should_refresh_cache(status)
 
         # Handle Next Up separately - it needs special episode-level processing
         if next_up and not cache_only:

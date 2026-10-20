@@ -2132,3 +2132,23 @@ msgstr ""
 msgctxt "#30528"
 msgid "Stop scraping immediately once cached debrid torrents are found."
 msgstr ""
+
+msgctxt "#30529"
+msgid "Watch History Click Action"
+msgstr ""
+
+msgctxt "#30530"
+msgid "Choose action when selecting an anime from the Watch History springboard."
+msgstr ""
+
+msgctxt "#30531"
+msgid "Open Episode List"
+msgstr ""
+
+msgctxt "#30532"
+msgid "Play Next Episode"
+msgstr ""
+
+msgctxt "#30533"
+msgid "Resume / Replay Episode"
+msgstr ""

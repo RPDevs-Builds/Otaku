@@ -94,18 +94,24 @@ def WATCHLIST_STATUS_TYPE_PAGES(payload, params):
 
 @Route('watchlist_to_ep/*')
 def WATCHLIST_TO_EP(payload, params):
-    payload_list = payload.rsplit("/")
-    # todo needs to be fixed
-    if len(payload_list) == 2:
-        mal_id, eps_watched = payload_list
-    else:
-        mal_id, eps_watched, extra = payload_list
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if not parts:
+        return control.exit_code()
+
+    mal_id = parts[0]
+    eps_watched = parts[1] if len(parts) > 1 else '0'
+
     show_meta = database.get_show(mal_id)
     if not show_meta:
         show_meta = BROWSER.get_anime(mal_id)
-    kodi_meta = pickle.loads(show_meta['kodi_meta'])
-    kodi_meta['eps_watched'] = eps_watched
-    database.update_kodi_meta(mal_id, kodi_meta)
+
+    if show_meta and show_meta.get('kodi_meta'):
+        try:
+            kodi_meta = pickle.loads(show_meta['kodi_meta'])
+            kodi_meta['eps_watched'] = eps_watched
+            database.update_kodi_meta(mal_id, kodi_meta)
+        except Exception as e:
+            control.log(f"Error updating kodi_meta for {mal_id}: {e}", "warning")
 
     anime_general, content_type = MetaBrowser.get_anime_init(mal_id)
     control.draw_items(anime_general, content_type)
@@ -116,8 +122,19 @@ def CONTEXT_MENU(payload, params):
     if not control.getBool('watchlist.update.enabled'):
         control.ok_dialog(control.ADDON_NAME, 'No Watchlist Enabled: \n\nPlease enable [B]Update Watchlist[/B] before using the Watchlist Manager')
         return control.exit_code()
-    payload_list = payload.rsplit('/')
-    path, mal_id, eps_watched = payload_list
+
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) >= 3:
+        path, mal_id, eps_watched = parts[-3], parts[-2], parts[-1]
+    elif len(parts) == 2:
+        path, mal_id = parts
+        eps_watched = '0'
+    elif len(parts) == 1:
+        mal_id = parts[0]
+        path = ''
+        eps_watched = '0'
+    else:
+        return control.exit_code()
 
     if not (show := database.get_show(mal_id)):
         show = BROWSER.get_anime(mal_id)
@@ -128,8 +145,13 @@ def CONTEXT_MENU(payload, params):
         control.ok_dialog(control.ADDON_NAME, 'No Watchlist Enabled: \n\nPlease Enable a Watchlist before using the Watchlist Manager')
         return control.exit_code()
 
-    kodi_meta = pickle.loads(show['kodi_meta'])
-    title = kodi_meta['title_userPreferred']
+    title = ''
+    if show and show.get('kodi_meta'):
+        try:
+            kodi_meta = pickle.loads(show['kodi_meta'])
+            title = kodi_meta.get('title_userPreferred', '')
+        except Exception:
+            title = ''
 
     # Build watchlist choices with labels
     flavor_labels = {

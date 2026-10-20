@@ -24,7 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 📺 Watch History Springboard
 - **High-Speed Local Springboard**: Transformed Watch History into a 100% local, zero-lag springboard for recently watched anime (`save_to_watch_history` in `Main.py` and `ui/player.py`). Deduplicates and prepends items, tracking `last_watched_episode`, `last_watched_at`, and total progress badges (`[Ep X/Y]`).
 - **Dynamic Artwork & Badges**: Main menu Watch History folder dynamically displays poster artwork extracted from the most recently watched anime entry.
-- **Direct Springboard Playback & Context Actions**: Clicking a history item launches directly into playback of the last watched episode (`watchlist_to_ep/{mal_id}/{ep}`). Added rich context menu actions:
+- **Customizable Click Action**: Added `interface.watchhistory.click` in **Settings → General** to configure primary click behavior on history items:
+  - `0` (Default): *Open Episode List*
+  - `1`: *Play Next Episode*
+  - `2`: *Resume / Replay Last Episode*
+- **Context Menu Mark as Watched Sync**: Automatically records and updates Watch History when an episode is marked as watched via the Kodi context menu (`MARKED_AS_WATCHED`).
+- **Direct Springboard Playback & Context Actions**: Added rich context menu actions:
   - *Play Next Episode*
   - *Resume Episode*
   - *Browse Episodes*
@@ -33,9 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ⚡ Watchlist Performance & Navigation Overhaul
 - **Pre-Slicing Pagination (Simkl & AniList)**: Fixed severe 30–60s menu freezes and timeouts on massive lists (1,000+ anime in Currently Watching and Completed). Raw list items are now sorted and sliced into page batches in-memory *before* executing expensive metadata enrichment (`collect_meta` and AniList GraphQL queries), reducing menu loading time to `<0.2s`.
 - **Targeted Cache Invalidation**: Progress updates on watched episodes now invalidate only the active lists (`watching`/`CURRENT` and `next_up`) across Simkl, AniList, Kitsu, and MyAnimeList, preserving large Completed and Plan to Watch caches.
+- **Granular Remote Activity Invalidation**: Updated `_should_refresh_cache(status)` across all watchlist flavors to only invalidate the active status rather than clearing all cached lists on remote activity checks.
+- **Watchlist to Episode Route Parsing Guard**: Fixed `# todo needs to be fixed` in `WatchlistIntegration.py` line 98, introducing robust variable-length path parsing and handling malformed/corrupted metadata.
 - **Parallel Multi-Watchlist Progress Sync**: Concurrently dispatches watch progress updates across all enabled watchlist flavors using `ThreadPoolExecutor` in `WatchlistFlavor/__init__.py`, cutting sync delays from 3–6s down to `<1s`.
 
 ### 🎮 Player, Dialogs & Remote Control Optimization
+- **Playback Stopped Watched Milestone Guarantee**: When playback is stopped after reaching the watched threshold (`pct >= update_percent`), immediately triggers watchlist scrobble and history updates before `keepAlive` tick fires, ensuring progress is never lost.
+- **Episode Number Integer Coercion**: Coerced episode strings to integers in `handle_player` to prevent `TypeError` during playlist slicing.
 - **AniSkip 500ms Precision Polling**: Dropped intro skip polling interval from 2000ms to 500ms in `ui/player.py` for instantaneous intro skip dialog and auto-skip triggering on the beat.
 - **Outro Polling Drop to 1s**: Reduced outro/playing next dialog polling sleep from 5s to 1s for immediate synchronization with AniSkip outro timestamps.
 - **Android TV Remote Enter/Select Fix**: Resolved an issue where physical Select/Enter/DPad Center button on Android TV remotes failed to trigger buttons on `skip_intro.py` and `playing_next.py` dialogs by checking `action.getId() in [ACTION_SELECT_ITEM, 7]`.
@@ -46,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Subtitle Auto-Selection Fix**: Fixed auto-selection bug when single-track Japanese audio was present.
 
 ### 🔍 Scrapers & Debrid Engine
+- **Worker Exception Safety & Freeze Elimination**: Wrapped `_torrent_sources_worker`, `_hoster_sources_worker`, `_embed_sources_worker`, `user_local_inspection`, and `user_cloud_inspection` in `try ... finally:` blocks in `pages/__init__.py`. Guaranteed provider removal on error prevents scraping dialogs from hanging for 60s when a scraper fails.
 - **Early Scraping Termination on Cached Torrents**: Added `general.terminate.ontorrent` toggle ("Terminate on Cached Torrents", strings #30527 & #30528) to stop scraper execution early once cached debrid streams are found.
 - **Rescrape Cache Invalidation & Live Debrid Re-Verification**: `force_refresh=True` purges stale scraper results from SQLite and RAM cache during Rescrape, while bypassing local debrid cache to re-verify external availability live across all candidate hashes.
 - **Shallow Dict Cloning**: Replaced recursive `deepcopy` with shallow dict cloning in `debrid/__init__.py`, accelerating worker spawning by 15–30x.
@@ -54,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Premiumize Storage Quota & File Matching**: Added safety checks for `storage_info` and `'space_used'` key existence; refined video extension validation to inspect `i.get('path')` before download URLs with query tokens.
 
 ### 💾 Unified Cache & Database Hub
+- **Database Context Manager Connection Safety**: Initialized `_conn` and `_cursor` in `SQL.__init__` to protect against `AttributeError` in `__exit__` if connection fails; guarded `clean_expired_cache` against uninitialized debrid caches.
 - **Consolidated Cache Hub**: Expanded **Cache** settings tab with 4 granular clearing actions: **Clear All Cache**, **Clear Scrapers Cache Only**, **Clear Debrid Cache Only**, and **Clear Metadata Cache Only**.
 - **Global Context Menu**: Added "Clear Cache" context menu item for instant cache wiping across all Otaku items and directories, with mirrored window properties for both main and testing addons.
 - **Automated Expired Cache Pruning**: Scheduled `database.clean_expired_cache(max_age_days=14)` during service startup maintenance to purge dead cache rows and expired debrid entries, preventing database bloat.
@@ -63,9 +74,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Source Select UI Badges**: Added color-coded resolution, audio, debrid, and format badges in the Source Select dialog.
 
 ### 🛠️ Bug Fixes & Stability
+- **Route Path Parsing Hardening**: Replaced naive `rsplit("/")` across `animes/*`, `play/*`, `play_movie/*`, `find_recommendations/*`, `find_relations/*`, `watch_order/*`, and `delete_anime_database/*` with safe strip-and-slice tokenization.
+- **CLI Argument Exception Guard**: Caught `ValueError` alongside `IndexError` on non-numeric `sys.argv[1]` in `control.py`.
 - **SourceSelect onInit TypeError**: Fixed `TypeError` in `windows/source_select.py` by supporting default argument in `control.getBool` and `control.getInt`.
 - **Search History Typo**: Corrected typo in `ui/utils.py` to `'Remove Search Item'`.
 - **AniDB Client ID Guard**: Guarded `api_info['client_id']` in `endpoints/anidb.py` against `NoneType`.
+- **Airing Calendar Feedback**: Added visual notification when calendar data is unavailable instead of silent failure.
 - **Active Background Playback Context Menu**: Removed `!Player.HasMedia` constraint from Source Select, Rescrape, and Marked as Watched context menu items, enabling context menus during background playback.
 - **MIME Type Normalization**: Handled `application/octet-stream` responses returned by CDN nodes in `resolver.py` to avoid demuxer failures and InputStream Adaptive conflicts on Android devices.
 - **Settings Help Descriptions**: Added descriptive user-facing help text across all advanced settings tabs in `strings.po` and `settings.xml`.

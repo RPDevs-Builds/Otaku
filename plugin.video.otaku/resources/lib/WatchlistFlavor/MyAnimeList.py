@@ -135,7 +135,7 @@ class MyAnimeListWLF(WatchlistFlavorBase):
 
     def get_watchlist_status(self, status, next_up, offset, page, cache_only=False):
         # Check for remote changes before using cache
-        self._should_refresh_cache()
+        self._should_refresh_cache(status)
 
         # Handle Next Up separately - it needs special episode-level processing
         if next_up and not cache_only:

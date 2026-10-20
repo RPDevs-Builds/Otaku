@@ -75,7 +75,10 @@ class WatchlistPlayer(player):
     def handle_player(self, mal_id, watchlist_update, episode, resume, path, type, provider, context, ffprobe_chapters=None):
         self.mal_id = mal_id
         self._watchlist_update = watchlist_update
-        self.episode = episode
+        try:
+            self.episode = int(episode) if episode else 1
+        except (ValueError, TypeError):
+            self.episode = 1
         self.episodes = database.get_episode_list(self.mal_id)
         self.resume = resume
         self.path = path
@@ -118,8 +121,21 @@ class WatchlistPlayer(player):
     def onPlayBackStopped(self):
         control.closeAllDialogs()
         playList.clear()
+        pct = self.getWatchedPercent()
+        if not self.updated and pct >= self.update_percent:
+            if self._watchlist_update:
+                try:
+                    self._watchlist_update(self.mal_id, self.episode)
+                except Exception as e:
+                    control.log(f"Error updating watchlist on playback stop: {e}", "warning")
+            self.updated = True
+            try:
+                from resources.lib import Main
+                Main.save_to_watch_history(self.mal_id, self.episode, len(self.episodes) if self.episodes else None)
+            except Exception as e:
+                control.log(f"Error saving watch history on playback stop: {e}", "warning")
+
         if self.path:
-            pct = self.getWatchedPercent()
             if 10 < pct < 90:
                 query = {
                     'jsonrpc': '2.0',
@@ -153,6 +169,19 @@ class WatchlistPlayer(player):
 
     def onPlayBackEnded(self):
         control.closeAllDialogs()
+        if not self.updated:
+            if self._watchlist_update:
+                try:
+                    self._watchlist_update(self.mal_id, self.episode)
+                except Exception as e:
+                    control.log(f"Error updating watchlist on playback end: {e}", "warning")
+            self.updated = True
+            try:
+                from resources.lib import Main
+                Main.save_to_watch_history(self.mal_id, self.episode, len(self.episodes) if self.episodes else None)
+            except Exception as e:
+                control.log(f"Error saving watch history on playback end: {e}", "warning")
+
         if self.path:
             query = {
                 'jsonrpc': '2.0',

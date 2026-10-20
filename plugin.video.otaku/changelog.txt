@@ -1,4 +1,13 @@
 Changelog v5.3.5 (2026-10-20):
+- Scraping: Worker exception safety (try/finally) in pages preventing 60s scraping dialog hangs on network/API errors
+- Watchlist: Fixed # todo route parameter parsing in watchlist_to_ep and protected against corrupted metadata
+- Routes: Hardened route path unpacking across animes, play, play_movie, find_recommendations, and delete_anime_database
+- Watch History: Added click action setting (Open Episode List, Play Next Episode, Resume Last Episode)
+- Watch History: Automatically sync Watch History when episodes are marked as watched via context menu
+- Player: Ensured watchlist progress and history are recorded on playback stop if watched threshold was reached
+- Player: Coerced episode strings to integers to prevent playlist slicing crashes
+- Database: Initialized SQL context manager attributes and guarded debrid cache deletion against uninitialized tables
+- Watchlist: Granular remote activity invalidation updating only active status without clearing completed lists
 - SmartPlay: Season pack continuity caching with instant fast-path playback for subsequent episodes without rescraping
 - SmartPlay: Multi-tier scoring engine prioritizing matching quality, release group, and embed provider continuity
 - SmartPlay: Pre-scraping optimization checking season pack coverage to eliminate redundant background scraper execution

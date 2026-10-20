@@ -53,7 +53,7 @@ class WatchlistFlavorBase:
     def watchlist():
         raise NotImplementedError('Should Not be called Directly')
 
-    def _should_refresh_cache(self):
+    def _should_refresh_cache(self, status=None):
         """Check the API's activity endpoint to see if the watchlist has changed remotely.
         Uses rate-limiting (2 min) so we don't hit the API on every page navigation.
         Returns True if the cache was invalidated (data changed remotely)."""
@@ -81,9 +81,15 @@ class WatchlistFlavorBase:
             save_watchlist_activity(self._NAME, remote_timestamp)
             return False
 
-        # Activity changed! Clear all watchlist caches for this service and save new timestamp
-        control.log(f"[{self._NAME}] Watchlist activity changed remotely, refreshing cache", level='info')
-        clear_watchlist_cache(self._NAME)
+        # Activity changed! Granularly clear caches for this status or all if unspecified
+        if status:
+            control.log(f"[{self._NAME}] Watchlist activity changed remotely, refreshing cache for status: {status}", level='info')
+            clear_watchlist_cache(self._NAME, status)
+            if status in ['watching', 'CURRENT', 'current']:
+                clear_watchlist_cache(self._NAME, 'next_up')
+        else:
+            control.log(f"[{self._NAME}] Watchlist activity changed remotely, refreshing cache", level='info')
+            clear_watchlist_cache(self._NAME)
         save_watchlist_activity(self._NAME, remote_timestamp)
         return True
 

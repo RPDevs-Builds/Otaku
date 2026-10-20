@@ -119,6 +119,8 @@ class SQL:
     def __init__(self, path, timeout=30):
         self.path = path
         self.timeout = timeout
+        self._conn = None
+        self._cursor = None
 
     def __enter__(self):
         dir_name = os.path.dirname(self.path) or control.dataPath
@@ -436,7 +438,10 @@ def clean_expired_cache(max_age_days=14):
     try:
         with SQL(control.cacheFile) as cur:
             cur.execute('DELETE FROM cache WHERE date < ?', (cutoff,))
-            cur.execute('DELETE FROM debrid_cache WHERE expires < ?', (int(time.time()),))
+            try:
+                cur.execute('DELETE FROM debrid_cache WHERE expires < ?', (int(time.time()),))
+            except Exception:
+                pass
             cur.connection.commit()
         control.log(f"Cleaned expired cache entries older than {max_age_days} days", 'info')
     except Exception as e:
