@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 2026-10-19
 
 ### Fixed
+- **Debrid Cache Maintenance & Storage Pruning (`debrid_cache.py`, `database.py`)**:
+  - Integrated `debrid_cache` table dropping into `database.cache_clear()` so **Settings → General → Clear Cache** purges debrid hash records along with general cache and watchlist data.
+  - Added indexed automatic TTL pruning (`DELETE FROM debrid_cache WHERE expires < now`) executed periodically on write workers to prevent unbounded SQLite file growth.
 - **Premiumize Torrent Cache Checking (`hash_check`)**:
   - Replaced query-string `GET` requests with chunked `POST` requests (`chunk_size=100`) transmitting form data `[('items[]', hash) ...]`.
   - Fixes HTTP 414 (*Request-URI Too Long*) errors when scraping high-volume sources and checking 100+ torrent infohashes simultaneously.

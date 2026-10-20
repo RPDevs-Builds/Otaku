@@ -28,6 +28,21 @@ def _ensure_debrid_cache_table():
         '(hash TEXT, debrid TEXT, cached TEXT, expires INTEGER, '
         'UNIQUE(hash, debrid))'
     )
+    database._ensure_table(
+        control.cacheFile, 'debrid_cache_ix_expires',
+        'CREATE INDEX IF NOT EXISTS ix_debrid_cache_expires ON debrid_cache (expires)'
+    )
+
+
+def prune_expired_hashes():
+    """Purge expired cache entries to prevent unbounded table growth."""
+    try:
+        now = int(time.time())
+        with database.SQL(control.cacheFile) as cur:
+            cur.execute('DELETE FROM debrid_cache WHERE expires < ?', (now,))
+            cur.connection.commit()
+    except Exception as e:
+        control.log(f'Error pruning debrid cache: {e}', 'warning')
 
 
 def get_cached_hashes(hash_list):
@@ -58,6 +73,8 @@ def set_cached_hashes(hash_status_list, debrid):
             [(h, debrid, status, expires) for h, status in hash_status_list]
         )
         cur.connection.commit()
+    if random.random() < 0.2:
+        prune_expired_hashes()
 
 
 def clear_debrid_cache():

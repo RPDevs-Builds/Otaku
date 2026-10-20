@@ -292,13 +292,16 @@ def cache_remove(key):
 
 
 def cache_clear():
-    """Wipe general cache, watchlist cache, activity, and enrichment data."""
+    """Wipe general cache, debrid hash cache, watchlist cache, activity, and enrichment data."""
     with SQL(control.cacheFile) as cur:
         cur.execute("DROP TABLE IF EXISTS cache")
+        cur.execute("DROP TABLE IF EXISTS debrid_cache")
         cur.execute("VACUUM")
         cur.connection.commit()
     _tables_ready.discard(f"{control.cacheFile}:cache")
     _tables_ready.discard(f"{control.cacheFile}:cache_ix_key")
+    _tables_ready.discard(f"{control.cacheFile}:debrid_cache")
+    _tables_ready.discard(f"{control.cacheFile}:debrid_cache_ix_expires")
 
     clear_watchlist_cache()
     clear_watchlist_activity()
