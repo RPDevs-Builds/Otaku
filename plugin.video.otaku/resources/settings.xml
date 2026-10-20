@@ -3598,6 +3598,11 @@
 					<default>false</default>
 					<control type="toggle"/>
 				</setting>
+				<setting id="context.otaku.clearcache" type="boolean" label="30072" help="">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
 			</group>
 		</category>
 

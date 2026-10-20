@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 2026-10-19
 
 ### Added
+- **Clear Cache Context Menu Item (`context.otaku`, `control.py`, `settings.xml`, `anichart.py`)**:
+  - Added global "Clear Cache" context menu item for instant cache wiping across all Otaku items and directories.
+  - Added `context.otaku.clearcache` toggle under **Settings → Context Customization** (enabled by default) and mirrored window properties for both main and testing addons.
+  - Added "Clear Cache" action support in AniChart dialog context menu.
 - **Centralized Cache Settings Hub & Granular Actions (`settings.xml`, `database.py`, `Main.py`, `AnimeSchedule.py`)**:
   - Expanded **Cache** settings tab with 4 granular clearing actions: **Clear All Cache**, **Clear Scrapers Cache Only**, **Clear Debrid Cache Only**, and **Clear Metadata Cache Only**.
   - Relocated **Enable Kodi RAM Cache** toggle (`general.kodi.cache`) into the Cache category.

@@ -126,6 +126,8 @@ class Anichart(BaseWindow):
                 context_menu_options.append("Delete From Database")
             if control.getBool('context.otaku.watchlist'):
                 context_menu_options.append("WatchList Manager")
+            if control.getBool('context.otaku.clearcache'):
+                context_menu_options.append("Clear Cache")
 
             context = control.context_menu(context_menu_options)
             # if user cancels (context == -1), just return
@@ -160,6 +162,8 @@ class Anichart(BaseWindow):
                 payload = f"some_path/{anime}/0"
                 params = {}
                 WatchlistIntegration.CONTEXT_MENU(payload, params)
+            elif choice == "Clear Cache":
+                Main.CLEAR_CACHE(None, {})
 
     def handle_action(self, actionID) -> None:
         # only act when focus is on our list

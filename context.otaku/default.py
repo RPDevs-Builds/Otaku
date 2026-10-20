@@ -58,7 +58,10 @@ def main():
     arg = sys.argv[1]
     item = sys.listitem
     path = item.getPath()
-    plugin = 'plugin://plugin.video.otaku'
+    if 'plugin.video.otaku.testing' in path:
+        plugin = 'plugin://plugin.video.otaku.testing'
+    else:
+        plugin = 'plugin://plugin.video.otaku'
     if arg == 'findrecommendations':
         path = path.split(plugin, 1)[1]
         xbmc.executebuiltin(f"Container.Update({plugin}/find_recommendations{path})")
@@ -99,6 +102,8 @@ def main():
     elif arg == 'fanartselect':
         path = path.split(plugin, 1)[1]
         xbmc.executebuiltin(f"Container.Update({plugin}/fanart_select{path})")
+    elif arg == 'clearcache':
+        xbmc.executebuiltin(f"RunPlugin({plugin}/clear_cache)")
     else:
         raise KeyError("Could Not find %s in Context Menu Action" % arg)
 

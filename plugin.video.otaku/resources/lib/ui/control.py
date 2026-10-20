@@ -392,7 +392,8 @@ def process_context():
         "context.otaku.deletefromdatabase",
         "context.otaku.watchlist",
         "context.otaku.markedaswatched",
-        "context.otaku.fanartselect"
+        "context.otaku.fanartselect",
+        "context.otaku.clearcache"
     ]
     for s_id in context_settings:
         try:
