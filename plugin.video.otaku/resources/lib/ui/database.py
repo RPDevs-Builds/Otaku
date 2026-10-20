@@ -187,31 +187,37 @@ def get(function, duration, *args, **kwargs):
     if 'Browser' in getattr(function, '__module__', ''):
         duration = control.getInt('cache.metadata.ttl') or duration
 
+    force_refresh = kwargs.pop('force_refresh', False)
+
     key = _hash_function(function, args, kwargs)
     if 'key' in kwargs:
         key += kwargs.pop('key')
 
-    # --- Tier 1: RAM (instant) ---
-    mem = _mem_get(key)
-    if mem is not None and not _is_empty_result(mem):
-        return mem
+    if not force_refresh:
+        # --- Tier 1: RAM (instant) ---
+        mem = _mem_get(key)
+        if mem is not None and not _is_empty_result(mem):
+            return mem
 
-    # --- Tier 2: SQLite ---
-    _init_cache_table()
-    with SQL(control.cacheFile) as cur:
-        cur.execute('SELECT value, date FROM cache WHERE key=?', (key,))
-        row = cur.fetchone()
+        # --- Tier 2: SQLite ---
+        _init_cache_table()
+        with SQL(control.cacheFile) as cur:
+            cur.execute('SELECT value, date FROM cache WHERE key=?', (key,))
+            row = cur.fetchone()
 
-    if row and is_cache_valid(row['date'], duration):
-        try:
-            data = ast.literal_eval(row['value'])
-            if data is not None and not _is_empty_result(data):
-                _mem_set(key, row['value'], duration)
-                return data
-        except Exception:
-            control.log(
-                f"Cache corrupt for key {key}, fetching fresh data",
-                level='warning')
+        if row and is_cache_valid(row['date'], duration):
+            try:
+                data = ast.literal_eval(row['value'])
+                if data is not None and not _is_empty_result(data):
+                    _mem_set(key, row['value'], duration)
+                    return data
+            except Exception:
+                control.log(
+                    f"Cache corrupt for key {key}, fetching fresh data",
+                    level='warning')
+    else:
+        _cache_delete(key)
+        _mem_del(key)
 
     # --- Tier 3: Fresh call ---
     result = function(*args, **kwargs)

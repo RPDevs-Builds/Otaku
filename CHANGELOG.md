@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Wired metadata TTL resolution into `database.get()` and calendar TTL into `AnimeScheduleCalendar`.
 
 ### Fixed
+- **Rescrape Cache Invalidation & Live Debrid Re-Verification (`database.py`, `pages`, `debrid`)**:
+  - Implemented `force_refresh=True` in `database.get()` to purge stale scraper results from SQLite and RAM cache during Rescrape, execute live queries, and persist the fresh scrape results to the database.
+  - Forwarded `rescrape=True` through `pages` torrent scrapers into `Debrid().torrentCacheCheck()`.
+  - Updated `real_debrid_worker` and `all_debrid_worker` to bypass local `debrid_cache` database lookups on rescrape, query external availability checkers live for all candidate hashes, and update `debrid_cache` with fresh statuses.
 - **Context Menu Accessibility During Background/Active Playback (`context.otaku/addon.xml`)**:
   - Removed `!Player.HasMedia` constraint from **Source Select**, **Rescrape**, and **Marked as Watched** context menu items. Items are now accessible when browsing episode lists while media is paused or active in background.
   - Resolved add-on enablement state and ensured `context.otaku.testing` context extension is properly active across restarts.

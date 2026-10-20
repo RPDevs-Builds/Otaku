@@ -176,13 +176,12 @@ class Sources(GetSources):
 
     def _torrent_sources_worker(self, provider, query, mal_id, episode, status, media_type, rescrape, season, part):
         mod, cache_key = _TORRENT_MODULES[provider]
-        get_sources = mod.Sources().get_sources
+        sources_obj = mod.Sources()
+        sources_obj.rescrape = rescrape
+        get_sources = sources_obj.get_sources
         call_args = (query, mal_id, episode, status, media_type, season, part)
-        if rescrape:
-            all_sources = get_sources(*call_args)
-        else:
-            torrent_ttl = control.getInt('cache.torrents.ttl') or 24
-            all_sources = database.get(get_sources, torrent_ttl, *call_args, key=cache_key)
+        torrent_ttl = control.getInt('cache.torrents.ttl') or 24
+        all_sources = database.get(get_sources, torrent_ttl, *call_args, key=cache_key, force_refresh=rescrape)
         if all_sources is None:
             all_sources = {'cached': [], 'uncached': []}
         self.torrentUnCacheSources += all_sources['uncached']
@@ -192,13 +191,12 @@ class Sources(GetSources):
 
     def _hoster_sources_worker(self, hoster, query, mal_id, episode, status, media_type, rescrape, season, part):
         mod, cache_key, _, merge_mode = _HOSTER_MODULES[hoster]
-        get_sources = mod.Sources().get_sources
+        sources_obj = mod.Sources()
+        sources_obj.rescrape = rescrape
+        get_sources = sources_obj.get_sources
         call_args = (query, mal_id, episode, status, media_type, season, part)
-        if rescrape:
-            all_sources = get_sources(*call_args)
-        else:
-            scraper_ttl = control.getInt('cache.scrapers.ttl') or 8
-            all_sources = database.get(get_sources, scraper_ttl, *call_args, key=cache_key)
+        scraper_ttl = control.getInt('cache.scrapers.ttl') or 8
+        all_sources = database.get(get_sources, scraper_ttl, *call_args, key=cache_key, force_refresh=rescrape)
         if all_sources is None:
             all_sources = {'cached': [], 'uncached': []}
         if merge_mode == 'cached_only':
@@ -213,18 +211,12 @@ class Sources(GetSources):
         get_sources = mod.Sources().get_sources
         scraper_ttl = control.getInt('cache.scrapers.ttl') or 8
         if needs_media_type:
-            if rescrape:
-                src = get_sources(mal_id, episode, media_type)
-            else:
-                src = database.get(get_sources, scraper_ttl, mal_id, episode, media_type, key=cache_key)
+            src = database.get(get_sources, scraper_ttl, mal_id, episode, media_type, key=cache_key, force_refresh=rescrape)
         else:
-            if rescrape:
-                src = get_sources(mal_id, episode)
-            else:
-                src = database.get(get_sources, scraper_ttl, mal_id, episode, key=cache_key)
-        self.embedSources += src
+            src = database.get(get_sources, scraper_ttl, mal_id, episode, key=cache_key, force_refresh=rescrape)
+        self.embedSources += src or []
         if skip_prefix:
-            self._apply_embed_skip(skip_prefix, src)
+            self._apply_embed_skip(skip_prefix, src or [])
         self.remainingProviders.remove(pid)
 
     def user_local_inspection(self, query, mal_id, episode, season):

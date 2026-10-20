@@ -21,6 +21,7 @@ class Sources(BrowserBase):
         self.anidb_id = None
         self.anidb_ep_id = None
         self.paging = control.getInt('animetosho.paging')
+        self.rescrape = False
 
     def get_sources(self, show, mal_id, episode, status, media_type, season=None, part=None):
         control.log(f"Animetosho: Starting search for '{show}' episode {episode}")
@@ -222,7 +223,7 @@ class Sources(BrowserBase):
 
             filtered_list = source_utils.filter_sources('animetosho', list_, mal_id, int(season), int(episode), part, anidb_id=self.anidb_id)
 
-            cache_list, uncashed_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode=episode, media_type='episode')
+            cache_list, uncashed_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode=episode, media_type='episode', rescrape=getattr(self, 'rescrape', False))
             cache_list = sorted(cache_list, key=lambda k: k['downloads'], reverse=True)
 
             uncashed_list = [i for i in uncashed_list_ if i['seeders'] != 0]
@@ -272,7 +273,7 @@ class Sources(BrowserBase):
 
             # For movies we don't filter by season/episode
             filtered_list = source_utils.filter_sources('animetosho', list_, mal_id)
-            cache_list, uncashed_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode='1', media_type='movie')
+            cache_list, uncashed_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode='1', media_type='movie', rescrape=getattr(self, 'rescrape', False))
             cache_list = sorted(cache_list, key=lambda k: k['downloads'], reverse=True)
             uncashed_list = sorted([i for i in uncashed_list_ if i['seeders'] != 0], key=lambda k: k['seeders'], reverse=True)
 

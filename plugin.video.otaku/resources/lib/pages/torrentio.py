@@ -15,6 +15,7 @@ class Sources(BrowserBase):
         self.uncached = []
         self.sources = []
         self.kitsu_id = None
+        self.rescrape = False
 
     def _build_config(self):
         providers = control.getStringList('torrentio.config')
@@ -71,7 +72,7 @@ class Sources(BrowserBase):
         filtered_list = source_utils.filter_sources('torrentio', list_, mal_id, season_int, int(episode), part)
         control.log(f"Torrentio: {len(filtered_list)} sources after filtering")
 
-        cache_list, uncached_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode=episode, media_type=self.media_type)
+        cache_list, uncached_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode=episode, media_type=self.media_type, rescrape=getattr(self, 'rescrape', False))
         cache_list = sorted(cache_list, key=lambda k: k['seeders'], reverse=True)
 
         uncached_list = [i for i in uncached_list_ if i['seeders'] > 0]
@@ -105,7 +106,7 @@ class Sources(BrowserBase):
 
         filtered_list = source_utils.filter_sources('torrentio', list_, mal_id)
 
-        cache_list, uncached_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode='1', media_type=self.media_type)
+        cache_list, uncached_list_ = Debrid().torrentCacheCheck(filtered_list, mal_id=mal_id, episode='1', media_type=self.media_type, rescrape=getattr(self, 'rescrape', False))
         cache_list = sorted(cache_list, key=lambda k: k['seeders'], reverse=True)
 
         uncached_list = [i for i in uncached_list_ if i['seeders'] > 0]
