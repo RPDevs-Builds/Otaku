@@ -6,7 +6,7 @@ import urllib.error
 import threading
 import xbmc
 
-from resources.lib.ui import control, client, database_sync
+from resources.lib.ui import control, client, database_sync, database
 
 
 def refresh_apis():
@@ -311,6 +311,7 @@ if __name__ == "__main__":
     control.process_context()
     version_check()
     database_sync.SyncDatabase()
+    database.clean_expired_cache(14)
     refresh_apis()
     if control.getInt('update.time.30') == 0 or control.getInt('update.time.7') == 0:
         update_mappings_db()

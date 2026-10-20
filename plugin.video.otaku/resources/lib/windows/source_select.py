@@ -205,7 +205,7 @@ class SourceSelect(BaseWindow):
             self.position = self.display_list.getSelectedPosition()
             self.resolve_item()
 
-        if actionID == 117:
+        if actionID in [117, 101, 11]:  # Context menu (117) or remote long-press Select/Menu (101, 11)
             context = control.context_menu(
                 [
                     "Play",

@@ -404,7 +404,7 @@ class WatchlistPlayer(player):
                     # Show skip intro dialog (works for both aniskip data and default times)
                     PlayerDialogs().show_skip_intro(self.skipintro_aniskip, intro_end)
                 break
-            xbmc.sleep(2000)  # Check every 2 seconds instead of 1
+            xbmc.sleep(500)  # Check every 500ms for accurate intro skip timing
 
     def _handle_outro_and_playing_next(self):
         """Handle outro skip and playing next functionality with fallbacks - optimized"""

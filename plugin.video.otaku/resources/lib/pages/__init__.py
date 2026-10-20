@@ -160,6 +160,7 @@ class Sources(GetSources):
                 or not self.remainingProviders
                 or (control.getBool('general.terminate.oncloud') and len(self.cloud_files) > 0)
                 or (control.getBool('general.terminate.onlocal') and len(self.local_files) > 0)
+                or (control.getBool('general.terminate.ontorrent') and len(self.torrentCacheSources) > 0)
             ):
                 break
 

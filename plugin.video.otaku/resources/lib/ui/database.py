@@ -429,6 +429,20 @@ def cache_clear_show(mal_id):
         f'Cache for anime ID {mal_id} cleared', time=4000, sound=False)
 
 
+def clean_expired_cache(max_age_days=14):
+    """Purge stale cache entries older than max_age_days to keep cache.db compact and fast."""
+    _init_cache_table()
+    cutoff = int(time.time()) - (max_age_days * 86400)
+    try:
+        with SQL(control.cacheFile) as cur:
+            cur.execute('DELETE FROM cache WHERE date < ?', (cutoff,))
+            cur.execute('DELETE FROM debrid_cache WHERE expires < ?', (int(time.time()),))
+            cur.connection.commit()
+        control.log(f"Cleaned expired cache entries older than {max_age_days} days", 'info')
+    except Exception as e:
+        control.log(f"Error cleaning expired cache: {e}", 'warning')
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  Season Pack & Playback Continuity Caching
 # ═══════════════════════════════════════════════════════════════════════════

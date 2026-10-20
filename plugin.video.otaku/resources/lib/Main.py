@@ -395,17 +395,25 @@ def add_watch_history(items):
         recent_history = history_data.get('history', [])[:10]
 
         if recent_history:
-            # Add a "Watch History" menu item that shows recent watches
+            # Add a "Watch History" menu item with dynamic artwork from most recent anime
             history_title = control.lang(30068)
-
-            # Use a generic anime icon or create a custom one for history
+            most_recent = recent_history[0]
+            art = {
+                'poster': most_recent.get('poster', ''),
+                'fanart': most_recent.get('fanart', ''),
+                'landscape': most_recent.get('landscape') or most_recent.get('thumb', ''),
+                'banner': most_recent.get('banner', ''),
+                'clearart': most_recent.get('clearart', ''),
+                'clearlogo': most_recent.get('clearlogo', ''),
+            }
+            icon = art['poster'] if art.get('poster') else 'watch_history.png'
             history_info = {
-                'title': 'Watch History',
-                'plot': 'View your recently watched anime',
+                'title': history_title,
+                'plot': f"Recently watched: {most_recent.get('title', '')}",
                 'mediatype': 'tvshow',
             }
 
-            items.append((history_title, 'watch_history/', 'watch_history.png', history_info))
+            items.append((history_title, 'watch_history/', icon, history_info, art))
 
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         pass
@@ -1766,6 +1774,15 @@ def _finalize_menu_list_items(menu_items):
                 processed.append(utils.parse_view(base, False, True, False))
             else:
                 processed.append(utils.parse_view(base, True, False, False))
+        elif len(item) == 5:
+            name, url, image, info, art = item
+            fanart = art.get('fanart', '') if isinstance(art, dict) else ''
+            poster = art.get('poster', '') if isinstance(art, dict) else ''
+            landscape = art.get('landscape', '') if isinstance(art, dict) else ''
+            banner = art.get('banner', '') if isinstance(art, dict) else ''
+            clearart = art.get('clearart', '') if isinstance(art, dict) else ''
+            clearlogo = art.get('clearlogo', '') if isinstance(art, dict) else ''
+            processed.append(utils.allocate_item(name, url, True, False, [], image, info, fanart=fanart, poster=poster, landscape=landscape, banner=banner, clearart=clearart, clearlogo=clearlogo))
         else:
             name, url, image, info = item
             processed.append(utils.allocate_item(name, url, True, False, [], image, info))

@@ -2,7 +2,7 @@ from resources.lib.ui import client, control, database
 import xml.etree.ElementTree as ET
 
 api_info = database.get_info('AniDB')
-client_name = api_info['client_id']
+client_name = api_info['client_id'] if api_info else ''
 base_url = 'http://api.anidb.net:9001/httpapi'
 
 params = {

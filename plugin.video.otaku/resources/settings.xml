@@ -1018,6 +1018,11 @@
 					<default>false</default>
 					<control type="toggle"/>
 				</setting>
+				<setting id="general.terminate.ontorrent" type="boolean" label="30527" help="30528">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
 			</group>
 
 			<!-- Torrent Scraping -->
