@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Wired metadata TTL resolution into `database.get()` and calendar TTL into `AnimeScheduleCalendar`.
 
 ### Fixed
+- **Context Menu Accessibility During Background/Active Playback (`context.otaku/addon.xml`)**:
+  - Removed `!Player.HasMedia` constraint from **Source Select**, **Rescrape**, and **Marked as Watched** context menu items. Items are now accessible when browsing episode lists while media is paused or active in background.
+  - Resolved add-on enablement state and ensured `context.otaku.testing` context extension is properly active across restarts.
 - **Context Menu Options for Testing Addon (`control.py`, `default.py`)**:
   - Updated `process_context()` to populate both `context.otaku.*` and `context.otaku.testing.*` window properties so Source Select, Rescrape, and watchlist options appear in the context menu for both live and testing add-on instances.
   - Added `process_context()` invocation at `default.py` entrypoint to ensure context menu window properties remain warm across navigation.

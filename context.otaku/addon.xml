@@ -27,15 +27,15 @@
       </item>
       <item library="default.py" args="markedaswatched">
         <label>Marked as Watched [COLOR blue]WatchList[/COLOR]</label>
-        <visible>String.IsEqual(Window(home).Property(context.otaku.markedaswatched),true) + String.StartsWith(ListItem.Path,plugin://plugin.video.otaku/) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)] + !Player.HasMedia</visible>
+        <visible>String.IsEqual(Window(home).Property(context.otaku.markedaswatched),true) + String.StartsWith(ListItem.Path,plugin://plugin.video.otaku/) + [String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)]</visible>
       </item>
       <item library="default.py" args="rescrape">
         <label>Rescrape</label>
-        <visible>String.IsEqual(Window(home).Property(context.otaku.rescrape),true) + String.StartsWith(ListItem.Path,plugin://plugin.video.otaku/) + [String.IsEqual(ListItem.DBTYPE,episode)|String.IsEqual(ListItem.DBTYPE,movie)] + !Player.HasMedia</visible>
+        <visible>String.IsEqual(Window(home).Property(context.otaku.rescrape),true) + String.StartsWith(ListItem.Path,plugin://plugin.video.otaku/) + [String.IsEqual(ListItem.DBTYPE,episode)|String.IsEqual(ListItem.DBTYPE,movie)]</visible>
       </item>
       <item library="default.py" args="sourceselect">
         <label>Source Select</label>
-        <visible>String.IsEqual(Window(home).Property(context.otaku.sourceselect),true) + String.StartsWith(ListItem.Path,plugin://plugin.video.otaku/) + [String.IsEqual(ListItem.DBTYPE,episode)|String.IsEqual(ListItem.DBTYPE,movie)] + !Player.HasMedia</visible>
+        <visible>String.IsEqual(Window(home).Property(context.otaku.sourceselect),true) + String.StartsWith(ListItem.Path,plugin://plugin.video.otaku/) + [String.IsEqual(ListItem.DBTYPE,episode)|String.IsEqual(ListItem.DBTYPE,movie)]</visible>
       </item>
       <item library="default.py" args="logout">
         <label>Logout</label>
