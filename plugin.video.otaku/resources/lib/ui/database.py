@@ -163,6 +163,19 @@ def _init_cache_table():
 #  General Cache - 3-Tier: RAM → SQLite → Fresh API Call
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _is_empty_result(val):
+    """Detect empty results that should not poison the cache.
+    Includes None, empty sequences, empty dicts, or torrent dicts with empty buckets."""
+    if not val:
+        return True
+    if isinstance(val, dict):
+        if not any(val.values()):
+            return True
+        if all(isinstance(v, (list, tuple, set, dict)) and not v for v in val.values()):
+            return True
+    return False
+
+
 def get(function, duration, *args, **kwargs):
     """Cached function call with 3-tier lookup.
 
@@ -177,7 +190,7 @@ def get(function, duration, *args, **kwargs):
 
     # --- Tier 1: RAM (instant) ---
     mem = _mem_get(key)
-    if mem is not None:
+    if mem is not None and not _is_empty_result(mem):
         return mem
 
     # --- Tier 2: SQLite ---
@@ -189,7 +202,7 @@ def get(function, duration, *args, **kwargs):
     if row and is_cache_valid(row['date'], duration):
         try:
             data = ast.literal_eval(row['value'])
-            if data is not None:
+            if data is not None and not _is_empty_result(data):
                 _mem_set(key, row['value'], duration)
                 return data
         except Exception:
@@ -199,7 +212,7 @@ def get(function, duration, *args, **kwargs):
 
     # --- Tier 3: Fresh call ---
     result = function(*args, **kwargs)
-    if result is None:
+    if result is None or _is_empty_result(result):
         return result
     result_repr = repr(result)
     _cache_write(key, result_repr)

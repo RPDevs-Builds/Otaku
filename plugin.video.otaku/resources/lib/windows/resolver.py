@@ -121,7 +121,7 @@ class Resolver(BaseWindow):
         return sources
 
     def resolve(self, sources):
-        """Optimized resolve with reduced property updates"""
+        """Optimized resolve with reduced property updates and sequential stream failover"""
         for i in sources:
             self.return_data['source'] = i
             if self.canceled:
@@ -129,55 +129,55 @@ class Resolver(BaseWindow):
 
             # Batch property updates
             self._update_source_properties(i)
+            stream_link = None
 
             if 'uncached' in i['type']:
                 stream_link = self.resolve_uncache(i)
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    break
 
-            if i['type'] in ['torrent', 'cloud', 'hoster']:
+            elif i['type'] in ['torrent', 'cloud', 'hoster']:
                 if i['type'] == 'cloud' and i['debrid_provider'] == 'Alldebrid':
                     stream_link = i['hash']
                 else:
                     stream_link = self.resolve_source(self.resolvers[i['debrid_provider']], i)
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    break
 
             elif i['type'] == 'direct':
                 stream_link = i['hash']
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    if i.get('subs'):
-                        self.return_data['sub'] = i['subs']
-                    break
 
             elif i['type'] == 'embed':
                 from resources.lib.ui import embed_extractor
                 stream_link = embed_extractor.load_video_from_url(i['hash'])
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    break
 
             elif i['type'] == 'local':
                 stream_link = i['hash']
-                self.return_data = {
+                self.return_data['linkinfo'] = {
                     'source': i,
                     'url': stream_link,
                     'local': True,
                     'headers': {}
                 }
+                self.return_data['link'] = stream_link
                 break
 
-        if self.return_data.get('local'):
-            self.return_data['linkinfo'] = self.return_data
+            if stream_link:
+                self.return_data['link'] = stream_link
+                try:
+                    verified_linkinfo = self.prefetch_play_link(stream_link)
+                except Exception as e:
+                    control.log(f"Resolver: prefetch error for {i.get('provider')}: {e}", level='warning')
+                    verified_linkinfo = None
+
+                if verified_linkinfo:
+                    self.return_data['linkinfo'] = verified_linkinfo
+                    if i.get('subs'):
+                        self.return_data['sub'] = i['subs']
+                    break
+                else:
+                    control.log(f"Resolver: candidate {i.get('provider')} failed prefetch/verification, advancing to next candidate", level='warning')
+                    self.return_data['link'] = None
+
+        if self.return_data.get('linkinfo'):
+            ffprobe_chapters.attach_to_linkinfo(self.return_data['linkinfo'])
         else:
-            self.return_data['linkinfo'] = self.prefetch_play_link(self.return_data['link'])
-
-        ffprobe_chapters.attach_to_linkinfo(self.return_data.get('linkinfo'))
-
-        if not self.return_data['linkinfo']:
             self.return_data = False
 
         if self.play and isinstance(self.return_data, dict):
@@ -361,31 +361,48 @@ class Resolver(BaseWindow):
     @staticmethod
     def prefetch_play_link(link):
         if not link:
-            return
+            return None
         url = link
         headers = {}
         if '|' in url:
-            url, hdrs = url.split('|')
-            headers = dict([item.split('=') for item in hdrs.split('&')])
-            for header in headers:
-                headers[header] = urllib.parse.unquote_plus(headers[header])
+            url, hdrs = url.split('|', 1)
+            for item in hdrs.split('&'):
+                if '=' in item:
+                    k, v = item.split('=', 1)
+                    headers[k] = urllib.parse.unquote_plus(v)
 
         # If flaresolverr is enabled, fetch cookies to bypass Cloudflare
         if control.getBool('fs_enable'):
             from resources.lib.ui.client import cfcookie
-            cookie_obj = cfcookie()
-            cookie, ua = cookie_obj.get(url, control.getInt('fs_timeout'))
-            if cookie:
-                headers["Cookie"] = cookie
-                headers["User-Agent"] = ua
+            try:
+                cookie_obj = cfcookie()
+                cookie, ua = cookie_obj.get(url, control.getInt('fs_timeout'))
+                if cookie:
+                    headers["Cookie"] = cookie
+                    headers["User-Agent"] = ua
+            except Exception:
+                pass
 
-        # Use HEAD request instead of GET - only fetches headers, not the body
-        # This is much faster for debrid CDN links (avoids downloading video data)
-        response = client.head(url, headers=headers, timeout=30)
-        if not response or str(response.status_code) not in ['200', '201']:
-            status = response.status_code if response else 'failed'
-            raise Exception('could not resolve %s. status_code=%s' %
-                            (link, status))
+        # Try HEAD request first
+        response = None
+        try:
+            response = client.head(url, headers=headers, timeout=15)
+        except Exception as e:
+            control.log(f"Resolver: HEAD request failed for {url}: {e}", level='warning')
+
+        # Fallback to GET with Range: bytes=0-0 if HEAD fails or returns non-200/201/206
+        if not response or str(response.status_code) not in ['200', '201', '206']:
+            try:
+                get_headers = headers.copy()
+                get_headers['Range'] = 'bytes=0-0'
+                response = client.get(url, headers=get_headers, timeout=15)
+            except Exception as e:
+                control.log(f"Resolver: GET fallback failed for {url}: {e}", level='warning')
+
+        if not response or str(response.status_code) not in ['200', '201', '206']:
+            control.log(f"Resolver: could not verify {url}, status={response.status_code if response else 'failed'}", level='warning')
+            return None
+
         resp_headers = dict(response.headers)
         if 'Content-Type' not in resp_headers.keys():
             if 'Content-Length' not in resp_headers.keys():
