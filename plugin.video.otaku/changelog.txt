@@ -1,15 +1,33 @@
-Changelog v5.3.4 (2026-10-18):
-- Remote Control: Fixed physical Select/Enter button responsiveness on Skip Intro and Playing Next dialogs
-- Playback: Saved resume bookmarks across normal playback and SmartPlay; reset to 0 upon completion
-- Player: Dropped outro dialog polling sleep from 5s to 1s for immediate synchronization with AniSkip
-- Service: Added 30-minute perpetual token auto-refresh loop and uncoupled service monitor from cache setting
-- Watchlist: Parallelized multi-watchlist progress updates across services via concurrent thread pool
-- Player: Added boundary index guards on empty audio and subtitle streams to prevent playback crashes
+Changelog v5.3.5 (2026-10-20):
 - SmartPlay: Season pack continuity caching with instant fast-path playback for subsequent episodes without rescraping
 - SmartPlay: Multi-tier scoring engine prioritizing matching quality, release group, and embed provider continuity
 - SmartPlay: Pre-scraping optimization checking season pack coverage to eliminate redundant background scraper execution
 - SmartPlay: Smart playback failover that purges broken season packs, advances candidates, and rescans on failure
 - Settings: Added user toggles for season pack reuse, quality/group matching, and same-embed preference
+- Watch History: Revamped local springboard with episode progress badges, last watched dates, and direct episode launch
+- Watch History: Added rich context menu actions (Play Next Episode, Resume Episode, Browse Episodes, Remove from History)
+- Watch History: Dynamic menu folder artwork updating to the poster of the most recently watched anime
+- Watchlist: Fixed 30-60s menu freezes on Simkl and AniList by pre-slicing raw items prior to metadata collection
+- Watchlist: Targeted cache invalidation updating only active lists on episode watch across Simkl, AniList, Kitsu, and MAL
+- Watchlist: Parallelized multi-watchlist progress updates across services via concurrent thread pool (<1s latency)
+- Player: Dropped AniSkip intro skip polling interval to 500ms for instantaneous intro skips on the beat
+- Player: Dropped outro dialog polling sleep from 5s to 1s for immediate synchronization with AniSkip
+- Player: Saved resume bookmarks across normal playback, widgets, and SmartPlay; reset to 0 upon completion
+- Player: Added boundary index guards on empty audio and subtitle streams to prevent playback crashes
+- Remote Control: Fixed physical Select/Enter button responsiveness on Skip Intro and Playing Next dialogs
+- Remote Control: Added long-press context menu on Source Select (File Select / Download / Info) on Android TV remotes
+- Service: Added 30-minute perpetual token auto-refresh loop and uncoupled service monitor from cache setting
+- Service: Automated background cache.db expired pruning (14-day cutoff) on startup maintenance
+- Scraping: Added "Terminate on Cached Torrents" toggle to end scraper execution early once cached debrid streams exist
+- Scraping: Invalidate scraper cache and live re-verify debrid availability on rescrape (force_refresh)
+- Cache & DB: Expanded Cache tab with granular clear actions (Scrapers, Debrid, Metadata, All) and customizable TTL sliders
+- Cache & DB: Dynamic SQLite PRAGMA tuning (wal, synchronous=NORMAL, cache_size=-64000) for high concurrency
+- Context Menu: Global Clear Cache context menu item with mirrored window properties for testing addon
+- Context Menu: Allowed Source Select and Rescrape while media is playing or paused in the background
+- Debrid: Replaced deepcopy with shallow dict cloning in worker spawning (15-30x faster)
+- Debrid: Chunked POST hash checking for Premiumize to prevent HTTP 414 errors on massive torrent sets
+
+Changelog v5.3.4 (2026-10-18):
 - Otaku browser: fixed Airing Last, This, and Next season tabs (season query casing for the metadata API)
 - AnimePahe: fail soft when the search API returns no data; fixed invalid-JSON exception handling
 - MegaPlay: decrypt encrypted embed sources when the API no longer returns a plain file URL

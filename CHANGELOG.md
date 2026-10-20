@@ -7,54 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - 2026-10-19
+## [5.3.5] - 2026-10-20
 
-### Added
-- **Clear Cache Context Menu Item (`context.otaku`, `control.py`, `settings.xml`, `anichart.py`)**:
-  - Added global "Clear Cache" context menu item for instant cache wiping across all Otaku items and directories.
-  - Added `context.otaku.clearcache` toggle under **Settings → Context Customization** (enabled by default) and mirrored window properties for both main and testing addons.
-  - Added "Clear Cache" action support in AniChart dialog context menu.
-- **Centralized Cache Settings Hub & Granular Actions (`settings.xml`, `database.py`, `Main.py`, `AnimeSchedule.py`)**:
-  - Expanded **Cache** settings tab with 4 granular clearing actions: **Clear All Cache**, **Clear Scrapers Cache Only**, **Clear Debrid Cache Only**, and **Clear Metadata Cache Only**.
-  - Relocated **Enable Kodi RAM Cache** toggle (`general.kodi.cache`) into the Cache category.
-  - Added 4 customizable TTL duration sliders: **Scrapers Cache TTL** (1–72h), **Torrents Cache TTL** (1–168h), **Metadata Cache TTL** (1–72h), and **Airing Calendar Cache TTL** (1–48h).
-  - Wired metadata TTL resolution into `database.get()` and calendar TTL into `AnimeScheduleCalendar`.
+### 🚀 SmartPlay & Episode Continuity
+- **Season Pack Continuity Caching**: When an episode is selected from a season pack, the torrent infohash, file listing, and episode mappings are automatically cached in RAM and SQLite (`database.set_season_pack`, `database.get_season_pack`). Subsequent episodes launch via instant fast-path retrieval (<1ms) without rescraping.
+- **Multi-Tier Candidate Scoring Engine**: Built a multi-factor scoring heuristic in `ui/source_utils.py` and `windows/resolver.py` that reorders playback candidates by continuity affinity:
+  - Season pack match (`+100,000` pts)
+  - Sequential episode pattern match (`+30,000` pts)
+  - Same embed provider match (`+25,000` pts)
+  - Matching release group (`+20,000` pts)
+  - Video quality match (`+10,000` pts)
+- **Background Pre-Scraping with Coverage Verification**: Automatically initiates background scraping of the next episode during active playback (`ui/player.py`). Before launching background scrapers, Otaku checks if the active season pack already covers the next episode; if so, redundant scraper thread execution is bypassed to conserve CPU and network resources.
+- **Intelligent Playback Failover**: If a stream returns 403/404 errors, fails to demux, or a cached season pack has missing files, Otaku automatically purges the invalid season pack cache, advances down the prioritized candidate queue, and triggers a fresh scrape if all cached candidates fail.
+- **SmartPlay User Toggles**: Added user settings in **Settings → SmartPlay** for season pack reuse (`smartplay.seasonpack.reuse`), quality/group matching (`smartplay.match.quality`), and same-embed continuity (`smartplay.embed.continuity`).
 
-### Fixed
-- **Rescrape Cache Invalidation & Live Debrid Re-Verification (`database.py`, `pages`, `debrid`)**:
-  - Implemented `force_refresh=True` in `database.get()` to purge stale scraper results from SQLite and RAM cache during Rescrape, execute live queries, and persist the fresh scrape results to the database.
-  - Forwarded `rescrape=True` through `pages` torrent scrapers into `Debrid().torrentCacheCheck()`.
-  - Updated `real_debrid_worker` and `all_debrid_worker` to bypass local `debrid_cache` database lookups on rescrape, query external availability checkers live for all candidate hashes, and update `debrid_cache` with fresh statuses.
-- **Context Menu Accessibility During Background/Active Playback (`context.otaku/addon.xml`)**:
-  - Removed `!Player.HasMedia` constraint from **Source Select**, **Rescrape**, and **Marked as Watched** context menu items. Items are now accessible when browsing episode lists while media is paused or active in background.
-  - Resolved add-on enablement state and ensured `context.otaku.testing` context extension is properly active across restarts.
-- **Context Menu Options for Testing Addon (`control.py`, `default.py`)**:
-  - Updated `process_context()` to populate both `context.otaku.*` and `context.otaku.testing.*` window properties so Source Select, Rescrape, and watchlist options appear in the context menu for both live and testing add-on instances.
-  - Added `process_context()` invocation at `default.py` entrypoint to ensure context menu window properties remain warm across navigation.
-- **Debrid Cache Maintenance & Storage Pruning (`debrid_cache.py`, `database.py`)**:
-  - Integrated `debrid_cache` table dropping into `database.cache_clear()` so **Settings → General → Clear Cache** purges debrid hash records along with general cache and watchlist data.
-  - Added indexed automatic TTL pruning (`DELETE FROM debrid_cache WHERE expires < now`) executed periodically on write workers to prevent unbounded SQLite file growth.
-- **Premiumize Torrent Cache Checking (`hash_check`)**:
-  - Replaced query-string `GET` requests with chunked `POST` requests (`chunk_size=100`) transmitting form data `[('items[]', hash) ...]`.
-  - Fixes HTTP 414 (*Request-URI Too Long*) errors when scraping high-volume sources and checking 100+ torrent infohashes simultaneously.
-- **Premiumize Account Storage Management (`manage_storage_space`)**:
-  - Added safety checks for `storage_info` response and `'space_used'` key existence.
-  - Prevents unhandled `KeyError` and `TypeError` crashes during storage quota checks if the API returns rate limits, errors, or maintenance responses.
-- **Premiumize Torrent File Extension Validation (`resolve_single_magnet` & `resolve_uncached_source`)**:
-  - Updated `is_file_ext_valid()` check to inspect `i.get('path')` first, falling back to `i.get('link', '')`.
-  - Fixes false negatives during video filtering caused by CDN query parameters and token strings in download URLs (`.split('.')[-1]`).
-- **Premiumize Torrent Episode Matching & Branch Logic**:
-  - Fixed dead fallback branch where `elif len(filter_list) >= 1:` previously shadowed the multi-file fallback block; corrected to `elif len(filter_list) > 1:`.
-  - Added sample file filtering fallback (`'sample' not in path.lower()`) to select the main feature when regex episode matching returns no match.
-  - Handled interactive dialog cancellation: aborts playback cleanly (`return None`) when the user cancels the file selection modal (`user_select`) instead of forcing playback of the first file.
-- **Kodi Video Stream Resolver (`resolver.py`)**:
-  - **MIME Type Normalization**: Handled `application/octet-stream` responses returned by CDN nodes (CloudFront / Akamai / Cloudflare). Automatically maps `.mkv` to `video/x-matroska`, `.mp4` to `video/mp4`, `.m3u8` to `video/MP2T`, or removes `Content-Type` for other video containers so Kodi's internal FFmpeg demuxer can inspect stream magic bytes directly.
-  - **ListItem Property Guard**: Guarded `item.setProperty('MimeType', content_type)` in `_handle_playback()` to ignore `application/octet-stream`, avoiding playback failure and InputStream Adaptive conflicts on Android devices.
+### 📺 Watch History Springboard
+- **High-Speed Local Springboard**: Transformed Watch History into a 100% local, zero-lag springboard for recently watched anime (`save_to_watch_history` in `Main.py` and `ui/player.py`). Deduplicates and prepends items, tracking `last_watched_episode`, `last_watched_at`, and total progress badges (`[Ep X/Y]`).
+- **Dynamic Artwork & Badges**: Main menu Watch History folder dynamically displays poster artwork extracted from the most recently watched anime entry.
+- **Direct Springboard Playback & Context Actions**: Clicking a history item launches directly into playback of the last watched episode (`watchlist_to_ep/{mal_id}/{ep}`). Added rich context menu actions:
+  - *Play Next Episode*
+  - *Resume Episode*
+  - *Browse Episodes*
+  - *Remove from Watch History*
 
-### Infrastructure & Hardware Tuning
-- **Android TV / Low-Memory Hardware Cache Buffer**:
-  - Diagnosed `std::bad_alloc` crash in `CFileCache::Open` occurring on 32-bit ARM Android systems (e.g. onn. Streaming Device 4K Pro) when Kodi `filecache.memorysize` was configured to 1024 MB (1 GB contiguous buffer request on ~52 MB available heap).
-  - Validated stable playback by configuring `filecache.memorysize` to 64 MB.
+### ⚡ Watchlist Performance & Navigation Overhaul
+- **Pre-Slicing Pagination (Simkl & AniList)**: Fixed severe 30–60s menu freezes and timeouts on massive lists (1,000+ anime in Currently Watching and Completed). Raw list items are now sorted and sliced into page batches in-memory *before* executing expensive metadata enrichment (`collect_meta` and AniList GraphQL queries), reducing menu loading time to `<0.2s`.
+- **Targeted Cache Invalidation**: Progress updates on watched episodes now invalidate only the active lists (`watching`/`CURRENT` and `next_up`) across Simkl, AniList, Kitsu, and MyAnimeList, preserving large Completed and Plan to Watch caches.
+- **Parallel Multi-Watchlist Progress Sync**: Concurrently dispatches watch progress updates across all enabled watchlist flavors using `ThreadPoolExecutor` in `WatchlistFlavor/__init__.py`, cutting sync delays from 3–6s down to `<1s`.
+
+### 🎮 Player, Dialogs & Remote Control Optimization
+- **AniSkip 500ms Precision Polling**: Dropped intro skip polling interval from 2000ms to 500ms in `ui/player.py` for instantaneous intro skip dialog and auto-skip triggering on the beat.
+- **Outro Polling Drop to 1s**: Reduced outro/playing next dialog polling sleep from 5s to 1s for immediate synchronization with AniSkip outro timestamps.
+- **Android TV Remote Enter/Select Fix**: Resolved an issue where physical Select/Enter/DPad Center button on Android TV remotes failed to trigger buttons on `skip_intro.py` and `playing_next.py` dialogs by checking `action.getId() in [ACTION_SELECT_ITEM, 7]`.
+- **Remote Long-Press Context Menu on Source Select**: Added action IDs `101` (context menu) and `11` (long press / multi-info) in `windows/source_select.py` for direct context menu access on Android TV remotes (File Select / Download / Info).
+- **Cross-Playback Resume Bookmarking**: Enabled persistent Kodi resume bookmarks across normal playback, widget playback, and SmartPlay via `Files.SetFileDetails`, properly resetting bookmarks to 0 on episode completion.
+- **Perpetual Token Auto-Refresh**: Added a 30-minute background token refresh loop in `service.py` to prevent 401 unauthorized errors on always-on devices without tying service monitor to the cache setting.
+- **Audio/Subtitle Boundary Guards**: Added bounds safety checks on stream index selection in `ui/player.py` to prevent playback crashes on files with missing or empty audio/subtitle tracks.
+- **Subtitle Auto-Selection Fix**: Fixed auto-selection bug when single-track Japanese audio was present.
+
+### 🔍 Scrapers & Debrid Engine
+- **Early Scraping Termination on Cached Torrents**: Added `general.terminate.ontorrent` toggle ("Terminate on Cached Torrents", strings #30527 & #30528) to stop scraper execution early once cached debrid streams are found.
+- **Rescrape Cache Invalidation & Live Debrid Re-Verification**: `force_refresh=True` purges stale scraper results from SQLite and RAM cache during Rescrape, while bypassing local debrid cache to re-verify external availability live across all candidate hashes.
+- **Shallow Dict Cloning**: Replaced recursive `deepcopy` with shallow dict cloning in `debrid/__init__.py`, accelerating worker spawning by 15–30x.
+- **Threadpool Churn Elimination**: Replaced on-the-fly thread pool instantiation with single-pass synchronous counters and optimized worker pools.
+- **Chunked POST Hash Checking (Premiumize)**: Replaced query-string `GET` requests with chunked `POST` requests (`chunk_size=100`) transmitting form data `[('items[]', hash) ...]`, eliminating HTTP 414 (*Request-URI Too Long*) errors on large torrent sets.
+- **Premiumize Storage Quota & File Matching**: Added safety checks for `storage_info` and `'space_used'` key existence; refined video extension validation to inspect `i.get('path')` before download URLs with query tokens.
+
+### 💾 Unified Cache & Database Hub
+- **Consolidated Cache Hub**: Expanded **Cache** settings tab with 4 granular clearing actions: **Clear All Cache**, **Clear Scrapers Cache Only**, **Clear Debrid Cache Only**, and **Clear Metadata Cache Only**.
+- **Global Context Menu**: Added "Clear Cache" context menu item for instant cache wiping across all Otaku items and directories, with mirrored window properties for both main and testing addons.
+- **Automated Expired Cache Pruning**: Scheduled `database.clean_expired_cache(max_age_days=14)` during service startup maintenance to purge dead cache rows and expired debrid entries, preventing database bloat.
+- **Customizable TTL Sliders**: Added sliders for Scrapers Cache TTL (1–72h), Torrents Cache TTL (1–168h), Metadata Cache TTL (1–72h), and Airing Calendar Cache TTL (1–48h).
+- **Dynamic SQLite PRAGMA Tuning**: Dynamically applied SQLite PRAGMAs (`wal`, `synchronous=NORMAL`, `cache_size=-64000`, `temp_store=MEMORY`) with a 30s TTL cache in `ui/database.py`.
+- **Database Maintenance & Telemetry**: Added live database statistics, multi-database VACUUM & optimization, integrity checks, and remote mapping synchronization under Cache settings.
+- **Source Select UI Badges**: Added color-coded resolution, audio, debrid, and format badges in the Source Select dialog.
+
+### 🛠️ Bug Fixes & Stability
+- **SourceSelect onInit TypeError**: Fixed `TypeError` in `windows/source_select.py` by supporting default argument in `control.getBool` and `control.getInt`.
+- **Search History Typo**: Corrected typo in `ui/utils.py` to `'Remove Search Item'`.
+- **AniDB Client ID Guard**: Guarded `api_info['client_id']` in `endpoints/anidb.py` against `NoneType`.
+- **Active Background Playback Context Menu**: Removed `!Player.HasMedia` constraint from Source Select, Rescrape, and Marked as Watched context menu items, enabling context menus during background playback.
+- **MIME Type Normalization**: Handled `application/octet-stream` responses returned by CDN nodes in `resolver.py` to avoid demuxer failures and InputStream Adaptive conflicts on Android devices.
+- **Settings Help Descriptions**: Added descriptive user-facing help text across all advanced settings tabs in `strings.po` and `settings.xml`.
 
 ---
 
