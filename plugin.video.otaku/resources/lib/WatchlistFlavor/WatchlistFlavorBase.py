@@ -305,9 +305,32 @@ class WatchlistFlavorBase:
         if data.get('is_movie') and mal_id:
             base['url'] = f'play_movie/{mal_id}/'
             base['info']['mediatype'] = 'movie'
-            return utils.parse_view(base, False, True, dub=False)
 
-        return utils.parse_view(base, False, True, dub=False)
+        from resources.lib.ui import divide_flavors
+        mal_dub = divide_flavors._get_mal_dub()
+        dub = bool(mal_dub and mal_id and mal_dub.get(str(mal_id)))
+        if control.getBool('divflavors.showdub') and dub:
+            base['name'] += ' [COLOR blue](Dub)[/COLOR]'
+            base['info']['title'] = base['name']
+
+        # Next Up reflects active user watchlist progress; allocate directly so entries are not suppressed by dubonly
+        poster = base.get("poster") or base.get("image")
+        cm = base.get("cm", [])
+        return utils.allocate_item(
+            base["name"],
+            base["url"],
+            False,
+            True,
+            cm,
+            base.get("image", ""),
+            base.get("info", {}),
+            fanart=base.get("fanart"),
+            poster=poster,
+            landscape=base.get("landscape"),
+            banner=base.get("banner"),
+            clearart=base.get("clearart"),
+            clearlogo=base.get("clearlogo")
+        )
 
     @staticmethod
     def _extract_anilist_enrichment(anilist_res):

@@ -654,7 +654,7 @@ def ANIME_STATISTICS(payload, params):
     open_anime_statistics(mal_id)
 
 
-@Route('watch_history/')
+@multi_route('watch_history/', 'watch_history')
 def WATCH_HISTORY(payload, params):
     """Display watch history as an instant springboard into recently watched anime."""
     try:
@@ -665,11 +665,17 @@ def WATCH_HISTORY(payload, params):
         with open(control.watch_history_json, 'r', encoding='utf-8') as f:
             history_data = json.load(f)
 
+        from resources.lib.ui import divide_flavors
+        show_dub_badge = control.getBool('divflavors.showdub')
+        mal_dub = divide_flavors._get_mal_dub() if show_dub_badge else {}
+
         history_items = []
         for entry in history_data.get('history', []):
             try:
-                # Get the mal_id from the correct location
-                mal_id = entry['UniqueIDs']['mal_id']
+                # Get the mal_id safely
+                mal_id = entry.get('UniqueIDs', {}).get('mal_id') or entry.get('mal_id')
+                if not mal_id:
+                    continue
 
                 # Format title and badges
                 title = entry.get('title', '')
@@ -677,11 +683,14 @@ def WATCH_HISTORY(payload, params):
                 last_ep = entry.get('last_watched_episode')
 
                 display_title = title
+                if show_dub_badge and mal_dub.get(str(mal_id)):
+                    display_title = f"{display_title} [COLOR blue](Dub)[/COLOR]"
+
                 if last_ep is not None:
                     if episodes and episodes > 1:
-                        display_title = f"{title} [COLOR dodgerblue]Ep {last_ep}/{episodes}[/COLOR]"
+                        display_title = f"{display_title} [COLOR dodgerblue]Ep {last_ep}/{episodes}[/COLOR]"
                     else:
-                        display_title = f"{title} [COLOR dodgerblue]Ep {last_ep}[/COLOR]"
+                        display_title = f"{display_title} [COLOR dodgerblue]Ep {last_ep}[/COLOR]"
 
                 plot = entry.get('plot', '')
                 if last_ep is not None:
@@ -711,11 +720,15 @@ def WATCH_HISTORY(payload, params):
                 fanart = entry.get('fanart', '')
                 if isinstance(fanart, list) and fanart:
                     fanart = random.choice(fanart)
+                elif isinstance(fanart, list):
+                    fanart = ''
 
                 # Handle banner with fallback to poster
                 banner = entry.get('banner', '')
                 if isinstance(banner, list) and banner:
                     banner = random.choice(banner)
+                elif isinstance(banner, list):
+                    banner = ''
                 if not banner:
                     banner = entry.get('poster', '')
 
@@ -754,28 +767,39 @@ def WATCH_HISTORY(payload, params):
 
                 cm.append(('Remove from Watch History', f'RunPlugin(plugin://{control.ADDON_ID}/remove_watch_history/{mal_id})'))
 
-                base = {
-                    'name': display_title,
-                    'url': base_url,
-                    'image': entry.get('poster', ''),
-                    'poster': entry.get('poster', ''),
-                    'fanart': fanart,
-                    'banner': banner,
-                    'info': info,
-                    'cm': cm
-                }
-
+                landscape = ''
                 if entry.get('thumb'):
                     thumb = entry['thumb']
-                    base['landscape'] = random.choice(thumb) if isinstance(thumb, list) else thumb
-                if entry.get('clearart'):
-                    clearart = entry['clearart']
-                    base['clearart'] = random.choice(clearart) if isinstance(clearart, list) else clearart
-                if entry.get('clearlogo'):
-                    clearlogo = entry['clearlogo']
-                    base['clearlogo'] = random.choice(clearlogo) if isinstance(clearlogo, list) else clearlogo
+                    landscape = random.choice(thumb) if isinstance(thumb, list) and thumb else (thumb if not isinstance(thumb, list) else '')
 
-                parsed_item = utils.parse_view(base, is_folder, is_playable, False)
+                clearart = ''
+                if entry.get('clearart'):
+                    ca = entry['clearart']
+                    clearart = random.choice(ca) if isinstance(ca, list) and ca else (ca if not isinstance(ca, list) else '')
+
+                clearlogo = ''
+                if entry.get('clearlogo'):
+                    cl = entry['clearlogo']
+                    clearlogo = random.choice(cl) if isinstance(cl, list) and cl else (cl if not isinstance(cl, list) else '')
+
+                poster = entry.get('poster', '') or entry.get('image', '')
+                image = entry.get('image', '') or poster
+
+                parsed_item = utils.allocate_item(
+                    display_title,
+                    base_url,
+                    is_folder,
+                    is_playable,
+                    cm,
+                    image=image,
+                    info=info,
+                    fanart=fanart,
+                    poster=poster,
+                    landscape=landscape,
+                    banner=banner,
+                    clearart=clearart,
+                    clearlogo=clearlogo
+                )
                 if parsed_item:
                     history_items.append(parsed_item)
 
@@ -1867,10 +1891,18 @@ def _finalize_menu_list_items(menu_items):
                 clearlogo = kodi_meta['clearlogo']
                 base['clearlogo'] = random.choice(clearlogo) if isinstance(clearlogo, list) else clearlogo
             episodes = kodi_meta.get('episodes', 0)
-            if episodes == 1:
-                processed.append(utils.parse_view(base, False, True, False))
-            else:
-                processed.append(utils.parse_view(base, True, False, False))
+            is_folder = episodes != 1
+            is_playable = episodes == 1
+            processed.append(utils.allocate_item(
+                base['name'], base['url'], is_folder, is_playable, [],
+                base['image'], base['info'],
+                fanart=base.get('fanart'),
+                poster=base.get('poster'),
+                landscape=base.get('landscape'),
+                banner=base.get('banner'),
+                clearart=base.get('clearart'),
+                clearlogo=base.get('clearlogo')
+            ))
         elif len(item) == 5:
             name, url, image, info, art = item
             fanart = art.get('fanart', '') if isinstance(art, dict) else ''
@@ -2076,14 +2108,14 @@ def CLEAR_WATCH_HISTORY(payload, params):
 
 @Route('remove_watch_history/*')
 def REMOVE_WATCH_HISTORY(payload, params):
-    mal_id = payload
+    mal_id = payload.strip('/')
     try:
         if control.pathExists(control.watch_history_json):
             with open(control.watch_history_json, 'r', encoding='utf-8') as f:
                 history_data = json.load(f)
             history_data['history'] = [
                 h for h in history_data.get('history', [])
-                if str(h.get('UniqueIDs', {}).get('mal_id')) != str(mal_id)
+                if str(h.get('UniqueIDs', {}).get('mal_id') or h.get('mal_id')) != str(mal_id)
             ]
             with open(control.watch_history_json, 'w', encoding='utf-8') as f:
                 json.dump(history_data, f, ensure_ascii=False, indent=2)
