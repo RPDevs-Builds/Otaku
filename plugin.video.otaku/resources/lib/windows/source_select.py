@@ -88,7 +88,7 @@ class SourceSelect(BaseWindow):
     def populate_sources(self, sources):
         self.display_list.reset()
         self.displayed_sources = sources  # Update the displayed sources list
-        badges_enabled = control.getBool('interface.source_select.badges', default=True)
+        badges_enabled = control.getBool('interface.source_select.badges')
 
         for source in sources:
             if source is None:

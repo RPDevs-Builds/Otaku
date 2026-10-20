@@ -225,7 +225,7 @@ def getSetting(key):
     return val
 
 
-def getBool(key):
+def getBool(key, default=False):
     """Get setting as boolean - first checks window property cache, then Kodi API"""
     cache = homeWindow.getProperty(f'{ADDON_ID}_{key}')
     if cache:
@@ -233,12 +233,15 @@ def getBool(key):
     ck = f'b_{key}'
     if ck in _settings_cache:
         return _settings_cache[ck]
-    val = settings.getBool(key)
+    try:
+        val = settings.getBool(key)
+    except Exception:
+        val = default
     _settings_cache[ck] = val
     return val
 
 
-def getInt(key):
+def getInt(key, default=0):
     """Get setting as integer - first checks window property cache, then Kodi API"""
     cache = homeWindow.getProperty(f'{ADDON_ID}_{key}')
     if cache:
@@ -249,7 +252,10 @@ def getInt(key):
     ck = f'i_{key}'
     if ck in _settings_cache:
         return _settings_cache[ck]
-    val = settings.getInt(key)
+    try:
+        val = settings.getInt(key)
+    except Exception:
+        val = default
     _settings_cache[ck] = val
     return val
 
