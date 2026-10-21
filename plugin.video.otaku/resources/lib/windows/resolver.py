@@ -238,9 +238,9 @@ class Resolver(BaseWindow):
                         else:
                             if source_utils.is_season_pack(i):
                                 database.clear_season_pack(self.mal_id, self.season)
+                            self.return_data = {'linkinfo': None, 'sub': None, 'source': None}
                             if control.getBool('general.autotrynext', default=True) and not self.canceled and (idx + 1 < len(sources)):
                                 control.notify(control.ADDON_NAME, "Playback failed on source, trying next candidate...", time=3000, sound=False)
-                                self.return_data = {'linkinfo': None, 'sub': None, 'source': None}
                                 continue
                             else:
                                 break
