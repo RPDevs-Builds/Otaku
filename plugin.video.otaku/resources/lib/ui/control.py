@@ -520,6 +520,19 @@ def closeAllDialogs():
     execute('Dialog.Close(all,true)')
 
 
+def clean_memory():
+    """Trigger Python garbage collection and release freed heap pages back to OS via malloc_trim."""
+    try:
+        import gc
+        gc.collect()
+        import ctypes
+        libc = ctypes.CDLL(None)
+        if hasattr(libc, 'malloc_trim'):
+            libc.malloc_trim(0)
+    except Exception:
+        pass
+
+
 def ok_dialog(title, text):
     return xbmcgui.Dialog().ok(title, text)
 
