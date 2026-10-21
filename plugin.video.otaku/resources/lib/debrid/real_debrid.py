@@ -243,7 +243,7 @@ class RealDebrid:
         elif len(selected_files) == 1:
             stream_link = self.resolve_hoster(files['links'][0])
         elif len(selected_files) > 1:
-            best_match = source_utils.get_best_match('path', [i[1] for i in selected_files], episode)
+            best_match = source_utils.get_best_match('path', [i[1] for i in selected_files], episode, pack_select=False, filename=filename)
             if best_match:
                 try:
                     file_index = [i[0] for i in selected_files if i[1]['path'] == best_match['path']][0]

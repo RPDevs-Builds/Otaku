@@ -430,8 +430,6 @@ def get_best_match(dict_key, dictionary_list, episode, pack_select=False, filena
         path = re.sub(r'\[.*?]', '', i[dict_key].split('/')[-1])
         if not is_file_ext_valid(path):
             continue
-        if filename and filename in i.get(dict_key, ''):
-            return i
         i['regex_matches'] = regex.findall(path)
         files.append(i)
     if pack_select:
@@ -441,6 +439,10 @@ def get_best_match(dict_key, dictionary_list, episode, pack_select=False, filena
         if len(files) == 0:
             control.setBool('best_match', False)
             return {}
+        if filename:
+            matching = [f for f in files if filename in f.get(dict_key, '')]
+            if matching:
+                return matching[0]
         files = sorted(files, key=lambda x: len(' '.join(list(x['regex_matches'][0]))), reverse=True)
         if len(files) != 1:
             files = user_select(files, dict_key)

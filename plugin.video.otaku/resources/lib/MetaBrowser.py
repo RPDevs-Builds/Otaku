@@ -109,6 +109,7 @@ def get_sources(mal_id, episode, media_type, rescrape=False, source_select=False
                 control.log(f"MetaBrowser: Reusing cached season pack for {mal_id} ep {episode}: {cached_pack.get('release_title')}", level='info')
                 pack_candidate = dict(cached_pack)
                 pack_candidate['episode_re'] = str(episode)
+                pack_candidate.pop('filename', None)
                 return [pack_candidate]
             else:
                 control.log(f"MetaBrowser: Cached season pack does not cover ep {episode}, clearing pack cache and rescanning", level='info')

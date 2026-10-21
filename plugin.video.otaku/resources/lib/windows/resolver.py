@@ -1,4 +1,5 @@
 import time
+import re
 import xbmcgui
 import xbmcplugin
 import xbmc
@@ -387,7 +388,9 @@ class Resolver(BaseWindow):
             if current_src:
                 database.save_last_played_source(self.mal_id, current_src)
                 if control.getBool('smartplay.reuse_season_pack', default=True) and source_utils.is_season_pack(current_src):
-                    database.set_season_pack(self.mal_id, self.season, current_src)
+                    pack_src = dict(current_src)
+                    pack_src.pop('filename', None)
+                    database.set_season_pack(self.mal_id, self.season, pack_src)
                     control.log(f"Resolver: Cached season pack for {self.mal_id} season {self.season}: {current_src.get('release_title')}", level='info')
             link_info = self.return_data.get('linkinfo') or {}
             ch = link_info.get('chapters') if isinstance(link_info, dict) else None
@@ -453,7 +456,14 @@ class Resolver(BaseWindow):
             stream_link = {}
 
             if source['type'] == 'torrent':
-                stream_link = api.resolve_single_magnet(hash_, magnet, source['episode_re'], self.pack_select, source.get('filename'))
+                filename = source.get('filename')
+                if filename:
+                    ep_reg = source_utils.get_cache_check_reg(self.episode)
+                    clean_fname = re.sub(r'\[.*?]', '', filename.split('/')[-1])
+                    if not ep_reg.search(clean_fname):
+                        filename = None
+                ep_re = source.get('episode_re') or str(self.episode)
+                stream_link = api.resolve_single_magnet(hash_, magnet, ep_re, self.pack_select, filename)
             elif source['type'] == 'cloud':
                 hash_ = api.resolve_cloud(source, self.pack_select)
                 if hash_:
