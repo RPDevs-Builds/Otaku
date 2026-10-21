@@ -561,10 +561,23 @@ def ANIMES_PAGE(payload, params):
     control.draw_items(anime_general, content)
 
 
+def _extract_mal_id(payload):
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if not parts:
+        return ''
+    if parts[0].isdigit():
+        return parts[0]
+    if len(parts) >= 2 and parts[1].isdigit():
+        return parts[1]
+    for p in parts:
+        if p.isdigit():
+            return p
+    return parts[-1]
+
+
 @Route('find_recommendations/*')
 def FIND_RECOMMENDATIONS(payload, params):
-    parts = [p for p in payload.strip('/').split('/') if p]
-    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
+    mal_id = _extract_mal_id(payload)
     page = int(params.get('page', 1))
     items = BROWSER.get_recommendations(mal_id, page)
     control.draw_items(items, 'tvshows')
@@ -575,15 +588,13 @@ def FIND_RECOMMENDATIONS(payload, params):
 
 @Route('find_relations/*')
 def FIND_RELATIONS(payload, params):
-    parts = [p for p in payload.strip('/').split('/') if p]
-    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
+    mal_id = _extract_mal_id(payload)
     control.draw_items(BROWSER.get_relations(mal_id), 'tvshows')
 
 
 @Route('watch_order/*')
 def WATCH_ORDER(payload, params):
-    parts = [p for p in payload.strip('/').split('/') if p]
-    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
+    mal_id = _extract_mal_id(payload)
     control.draw_items(BROWSER.get_watch_order(mal_id), 'tvshows')
 
 
@@ -654,12 +665,8 @@ def VIEW_REVIEW(payload, params):
 
 @Route('anime_statistics/*')
 def ANIME_STATISTICS(payload, params):
-    parts = payload.strip('/').split('/')
-    if len(parts) >= 3:
-        mal_id = parts[-2]
-    elif len(parts) == 2:
-        mal_id = parts[-1]
-    else:
+    mal_id = _extract_mal_id(payload)
+    if not mal_id:
         control.notify(control.ADDON_NAME, control.lang(30463))
         return
     open_anime_statistics(mal_id)
@@ -1788,8 +1795,7 @@ def MARK_PREVIOUS_WATCHED(payload, params):
 
 @Route('delete_anime_database/*')
 def DELETE_ANIME_DATABASE(payload, params):
-    parts = [p for p in payload.strip('/').split('/') if p]
-    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
+    mal_id = _extract_mal_id(payload)
     database.remove_from_database('shows', mal_id)
     database.remove_from_database('episodes', mal_id)
     database.remove_from_database('show_data', mal_id)
@@ -1835,8 +1841,7 @@ def REFRESH(payload, params):
 
 @Route('fanart_select/*')
 def FANART_SELECT(payload, params):
-    parts = [p for p in payload.strip('/').split('/') if p]
-    mal_id = parts[-2] if len(parts) >= 2 else (parts[0] if parts else '')
+    mal_id = _extract_mal_id(payload)
     if not (episode := database.get_episode(mal_id)):
         MetaBrowser.get_anime_init(mal_id)
         episode = database.get_episode(mal_id)

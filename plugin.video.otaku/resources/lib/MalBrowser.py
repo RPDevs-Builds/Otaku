@@ -327,15 +327,22 @@ class MalBrowser(BrowserBase):
         response = client.get(url)
         soup = BeautifulSoup(response.text, 'html.parser') if response else None
 
-        anime_info = soup.find('tr', {'data-id': str(mal_id)}) if soup else None
         watch_order_list = []
-        if anime_info is not None:
-            mal_links = soup.find_all('a', href=re.compile(r'https://myanimelist\.net/anime/\d+'))
+        if soup is not None:
+            trs = soup.find_all('tr', {'data-id': True})
             mal_ids = []
-            for link in mal_links:
-                m = re.search(r'\d+', link['href'])
-                if m:
-                    mal_ids.append(m.group())
+            for tr in trs:
+                did = tr.get('data-id')
+                if did and did.isdigit() and did not in mal_ids:
+                    mal_ids.append(did)
+
+            if not mal_ids:
+                mal_links = soup.find_all('a', href=re.compile(r'https://myanimelist\.net/anime/\d+'))
+                for link in mal_links:
+                    m = re.search(r'\d+', link['href'])
+                    if m and m.group() not in mal_ids:
+                        mal_ids.append(m.group())
+
             get_meta.collect_meta([{'mal_id': mid} for mid in mal_ids])
 
             for idx, idmal in enumerate(mal_ids):
