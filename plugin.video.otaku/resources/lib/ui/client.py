@@ -145,6 +145,8 @@ class Response:
 
     def json(self):
         """Parse response content as JSON"""
+        if not self.text:
+            return {}
         try:
             return json.loads(self.text)
         except (json.JSONDecodeError, ValueError) as e:

@@ -45,6 +45,22 @@ def allocate_item(name, url, isfolder, isplayable, cm, image='', info=None, fana
         fanart = _get_artwork_path(fanart)
     if poster and '/' not in poster:
         poster = _get_artwork_path(poster)
+    image_dict = {
+        'icon': image or '',
+        'thumb': image or ''
+    }
+    if poster:
+        image_dict['poster'] = poster
+    if fanart:
+        image_dict['fanart'] = fanart
+    if landscape:
+        image_dict['landscape'] = landscape
+    if banner:
+        image_dict['banner'] = banner
+    if clearart:
+        image_dict['clearart'] = clearart
+    if clearlogo:
+        image_dict['clearlogo'] = clearlogo
     return {
         'isfolder': isfolder,
         'isplayable': isplayable,
@@ -52,16 +68,7 @@ def allocate_item(name, url, isfolder, isplayable, cm, image='', info=None, fana
         'url': url,
         'info': info,
         'cm': cm,
-        'image': {
-            'poster': poster,
-            'icon': image,
-            'thumb': image,
-            'fanart': fanart,
-            'landscape': landscape,
-            'banner': banner,
-            'clearart': clearart,
-            'clearlogo': clearlogo
-        }
+        'image': image_dict
     }
 
 
