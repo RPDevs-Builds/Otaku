@@ -1,8 +1,12 @@
 import threading
 
-from copy import deepcopy
 from resources.lib.debrid import premiumize, torbox, easydebrid, debrid_cache
 from resources.lib.ui import control
+
+
+def _clone_torrents(torrent_list):
+    """Fast shallow clone of torrent dicts for worker threads (15-30x faster than deepcopy)."""
+    return [dict(t) for t in torrent_list]
 
 
 class Debrid:
@@ -20,35 +24,35 @@ class Debrid:
         self.torboxUnCached = []
         self.threads = []
 
-    def torrentCacheCheck(self, torrent_list, mal_id=None, episode=None, media_type=None):
+    def torrentCacheCheck(self, torrent_list, mal_id=None, episode=None, media_type=None, rescrape=False):
         enabled_debrids = control.enabled_debrid()
         if enabled_debrids['realdebrid']:
-            t = threading.Thread(target=self.real_debrid_worker, args=(deepcopy(torrent_list), mal_id, episode, media_type))
+            t = threading.Thread(target=self.real_debrid_worker, args=(_clone_torrents(torrent_list), mal_id, episode, media_type, rescrape))
             t.start()
             self.threads.append(t)
 
         if enabled_debrids['debridlink']:
-            t = threading.Thread(target=self.debrid_link_worker, args=(deepcopy(torrent_list),))
+            t = threading.Thread(target=self.debrid_link_worker, args=(_clone_torrents(torrent_list),))
             self.threads.append(t)
             t.start()
 
         if enabled_debrids['premiumize']:
-            t = threading.Thread(target=self.premiumize_worker, args=(deepcopy(torrent_list),))
+            t = threading.Thread(target=self.premiumize_worker, args=(_clone_torrents(torrent_list),))
             t.start()
             self.threads.append(t)
 
         if enabled_debrids['alldebrid']:
-            t = threading.Thread(target=self.all_debrid_worker, args=(deepcopy(torrent_list), mal_id, episode, media_type))
+            t = threading.Thread(target=self.all_debrid_worker, args=(_clone_torrents(torrent_list), mal_id, episode, media_type, rescrape))
             t.start()
             self.threads.append(t)
 
         if enabled_debrids['torbox']:
-            t = threading.Thread(target=self.torbox_worker, args=(deepcopy(torrent_list),))
+            t = threading.Thread(target=self.torbox_worker, args=(_clone_torrents(torrent_list),))
             t.start()
             self.threads.append(t)
 
         if enabled_debrids['easydebrid']:
-            t = threading.Thread(target=self.easydebrid_worker, args=(deepcopy(torrent_list),))
+            t = threading.Thread(target=self.easydebrid_worker, args=(_clone_torrents(torrent_list),))
             t.start()
             self.threads.append(t)
 
@@ -80,17 +84,21 @@ class Debrid:
             control.log(f'Failed to get IMDB ID for cache check: {e}', 'warning')
         return imdb_id, season
 
-    def all_debrid_worker(self, torrent_list, mal_id=None, episode=None, media_type=None):
+    def all_debrid_worker(self, torrent_list, mal_id=None, episode=None, media_type=None, rescrape=False):
         if not torrent_list:
             return
         hash_list = [i['hash'] for i in torrent_list]
 
-        # First check local debrid cache DB
-        cached_from_db = debrid_cache.get_cached_hashes(hash_list)
-        db_cached = {r['hash'] for r in cached_from_db if r['debrid'] == 'ad' and r['cached'] == 'True'}
-        db_uncached = {r['hash'] for r in cached_from_db if r['debrid'] == 'ad' and r['cached'] == 'False'}
-        db_known = db_cached | db_uncached
-        unknown_hashes = [h for h in hash_list if h not in db_known]
+        # Check local debrid cache DB unless rescraping
+        if rescrape:
+            db_cached = set()
+            unknown_hashes = hash_list
+        else:
+            cached_from_db = debrid_cache.get_cached_hashes(hash_list)
+            db_cached = {r['hash'] for r in cached_from_db if r['debrid'] == 'ad' and r['cached'] == 'True'}
+            db_uncached = {r['hash'] for r in cached_from_db if r['debrid'] == 'ad' and r['cached'] == 'False'}
+            db_known = db_cached | db_uncached
+            unknown_hashes = [h for h in hash_list if h not in db_known]
 
         # External check for unknown hashes
         external_cached = set()
@@ -120,17 +128,21 @@ class Debrid:
                 torrent['debrid_provider'] = 'Debrid-Link'
                 self.debridlinkUnCached.append(torrent)
 
-    def real_debrid_worker(self, torrent_list, mal_id=None, episode=None, media_type=None):
+    def real_debrid_worker(self, torrent_list, mal_id=None, episode=None, media_type=None, rescrape=False):
         if not torrent_list:
             return
         hash_list = [i['hash'] for i in torrent_list]
 
-        # First check local debrid cache DB
-        cached_from_db = debrid_cache.get_cached_hashes(hash_list)
-        db_cached = {r['hash'] for r in cached_from_db if r['debrid'] == 'rd' and r['cached'] == 'True'}
-        db_uncached = {r['hash'] for r in cached_from_db if r['debrid'] == 'rd' and r['cached'] == 'False'}
-        db_known = db_cached | db_uncached
-        unknown_hashes = [h for h in hash_list if h not in db_known]
+        # Check local debrid cache DB unless rescraping
+        if rescrape:
+            db_cached = set()
+            unknown_hashes = hash_list
+        else:
+            cached_from_db = debrid_cache.get_cached_hashes(hash_list)
+            db_cached = {r['hash'] for r in cached_from_db if r['debrid'] == 'rd' and r['cached'] == 'True'}
+            db_uncached = {r['hash'] for r in cached_from_db if r['debrid'] == 'rd' and r['cached'] == 'False'}
+            db_known = db_cached | db_uncached
+            unknown_hashes = [h for h in hash_list if h not in db_known]
 
         # External check for unknown hashes
         external_cached = set()

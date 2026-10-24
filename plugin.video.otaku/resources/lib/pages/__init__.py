@@ -1,3 +1,4 @@
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -144,34 +145,39 @@ class Sources(GetSources):
         start_time = time.perf_counter()
         runtime = 0
 
-        while runtime < timeout:
-            if not self.silent:
-                self.updateProgress()
-                self.update_properties("4K: %s | 1080: %s | 720: %s | SD: %s| EQ: %s" % (
-                    control.colorstr(self.torrents_qual_len[0] + self.hosters_qual_len[0] + self.embeds_qual_len[0]),
-                    control.colorstr(self.torrents_qual_len[1] + self.hosters_qual_len[1] + self.embeds_qual_len[1]),
-                    control.colorstr(self.torrents_qual_len[2] + self.hosters_qual_len[2] + self.embeds_qual_len[2]),
-                    control.colorstr(self.torrents_qual_len[3] + self.hosters_qual_len[3] + self.embeds_qual_len[3]),
-                    control.colorstr(self.torrents_qual_len[4] + self.hosters_qual_len[4] + self.embeds_qual_len[4])
-                ))
-            control.sleep(500)
+        try:
+            while runtime < timeout:
+                if not self.silent:
+                    self.updateProgress()
+                    self.update_properties("4K: %s | 1080: %s | 720: %s | SD: %s| EQ: %s" % (
+                        control.colorstr(self.torrents_qual_len[0] + self.hosters_qual_len[0] + self.embeds_qual_len[0]),
+                        control.colorstr(self.torrents_qual_len[1] + self.hosters_qual_len[1] + self.embeds_qual_len[1]),
+                        control.colorstr(self.torrents_qual_len[2] + self.hosters_qual_len[2] + self.embeds_qual_len[2]),
+                        control.colorstr(self.torrents_qual_len[3] + self.hosters_qual_len[3] + self.embeds_qual_len[3]),
+                        control.colorstr(self.torrents_qual_len[4] + self.hosters_qual_len[4] + self.embeds_qual_len[4])
+                    ))
+                control.sleep(100)
 
-            if (
-                self.canceled
-                or not self.remainingProviders
-                or (control.getBool('general.terminate.oncloud') and len(self.cloud_files) > 0)
-                or (control.getBool('general.terminate.onlocal') and len(self.local_files) > 0)
-            ):
-                break
+                if (
+                    self.canceled
+                    or not self.remainingProviders
+                    or (control.getBool('general.terminate.oncloud') and len(self.cloud_files) > 0)
+                    or (control.getBool('general.terminate.onlocal') and len(self.local_files) > 0)
+                ):
+                    break
 
-            runtime = time.perf_counter() - start_time
-            self.progress = runtime / timeout * 100
+                runtime = time.perf_counter() - start_time
+                self.progress = runtime / timeout * 100
 
-        if len(self.torrentSources) + len(self.hosterSources) + len(self.embedSources) + len(self.cloud_files) + len(self.local_files) == 0:
+            if len(self.torrentSources) + len(self.hosterSources) + len(self.embedSources) + len(self.cloud_files) + len(self.local_files) == 0:
+                self.return_data = []
+            else:
+                self.return_data = self.sortSources(self.torrentSources, self.hosterSources, self.embedSources, self.cloud_files, self.local_files, media_type, duration)
+        except Exception as e:
+            control.log(f"Error in getSources: {e}", 'error')
             self.return_data = []
-        else:
-            self.return_data = self.sortSources(self.torrentSources, self.hosterSources, self.embedSources, self.cloud_files, self.local_files, media_type, duration)
-        self.close()
+        finally:
+            self.close()
         return self.return_data
 
     def _torrent_sources_worker(self, provider, query, mal_id, episode, status, media_type, rescrape, season, part):
@@ -256,18 +262,58 @@ class Sources(GetSources):
         # Filter by size
         filter_option = control.getInt('general.fileFilter')
 
+        def _get_size_in_gb(item):
+            byte_size = item.get('byte_size')
+            if byte_size and isinstance(byte_size, (int, float)) and byte_size > 0:
+                return byte_size / (1024.0 ** 3)
+            raw_size = item.get('size')
+            if not raw_size or not isinstance(raw_size, str):
+                return None
+            raw_size = raw_size.strip()
+            if raw_size.upper() in ('NA', 'N/A', 'UNKNOWN', 'NONE', ''):
+                return None
+            match = re.search(r'([\d.]+)\s*([KMGTP]?B)', raw_size, re.IGNORECASE)
+            if not match:
+                return None
+            try:
+                num = float(match.group(1))
+            except (ValueError, TypeError):
+                return None
+            unit = match.group(2).upper()
+            if unit == 'TB':
+                return num * 1024.0
+            elif unit == 'GB':
+                return num
+            elif unit == 'MB':
+                return num / 1024.0
+            elif unit == 'KB':
+                return num / (1024.0 ** 2)
+            elif unit == 'B':
+                return num / (1024.0 ** 3)
+            return num
+
         if filter_option == 1:
             # web speed limit
             webspeed = control.getInt('general.webspeed')
-            len_in_sec = int(duration) * 60
+            try:
+                dur_val = float(duration) if duration else 0
+            except (ValueError, TypeError):
+                dur_val = 0
+            len_in_sec = dur_val * 60
 
-            _combined = combined
-            combined = [i for i in _combined if i['size'] != 'NA' and ((float(i['size'][:-3]) * 8000) / len_in_sec) <= webspeed]
+            if len_in_sec > 0:
+                _combined = combined
+                combined = []
+                for i in _combined:
+                    size_gb = _get_size_in_gb(i)
+                    if size_gb is not None:
+                        if ((size_gb * 8000) / len_in_sec) <= webspeed:
+                            combined.append(i)
+                    else:
+                        combined.append(i)
 
         elif filter_option == 2:
             # hard limit
-            _combined = combined
-
             if media_type == 'movie':
                 max_GB = float(control.getInt('general.movie.maxGB'))
                 min_GB = control.getNumber('general.movie.minGB')
@@ -275,17 +321,15 @@ class Sources(GetSources):
                 max_GB = float(control.getInt('general.episode.maxGB'))
                 min_GB = control.getNumber('general.episode.minGB')
 
+            _combined = combined
             combined = []
             for i in _combined:
-                if i['size'] != 'NA':
-                    size = float(i['size'][:-3])
-                    unit = i['size'][-2:].strip()
-
-                    if unit == 'MB':
-                        size /= 1024  # convert MB to GB for comparison
-
-                    if min_GB <= size <= max_GB:
+                size_gb = _get_size_in_gb(i)
+                if size_gb is not None:
+                    if min_GB <= size_gb <= max_GB:
                         combined.append(i)
+                else:
+                    combined.append(i)
 
         # Filter by release title
         if control.getBool('general.release_title_filter.enabled'):
@@ -367,16 +411,19 @@ class Sources(GetSources):
         return sortedList
 
     def updateProgress(self):
-        qualities = [4, 3, 2, 1, 0]
-
-        def count_quality(args):
-            source_list, quality = args
-            return len([i for i in source_list if i['quality'] == quality])
-
-        with ThreadPoolExecutor(max_workers=min(control.max_threads or 1, 20)) as executor:
-            torrent_tasks = [(self.torrentSources, quality) for quality in qualities]
-            hoster_tasks = [(self.hosterSources, quality) for quality in qualities]
-            embed_tasks = [(self.embedSources, quality) for quality in qualities]
-            self.torrents_qual_len = list(executor.map(count_quality, torrent_tasks))
-            self.hosters_qual_len = list(executor.map(count_quality, hoster_tasks))
-            self.embeds_qual_len = list(executor.map(count_quality, embed_tasks))
+        t_counts, h_counts, e_counts = [0] * 5, [0] * 5, [0] * 5
+        for s in self.torrentSources:
+            q = s.get('quality', 0)
+            if 0 <= q <= 4:
+                t_counts[4 - q] += 1
+        for s in self.hosterSources:
+            q = s.get('quality', 0)
+            if 0 <= q <= 4:
+                h_counts[4 - q] += 1
+        for s in self.embedSources:
+            q = s.get('quality', 0)
+            if 0 <= q <= 4:
+                e_counts[4 - q] += 1
+        self.torrents_qual_len = t_counts
+        self.hosters_qual_len = h_counts
+        self.embeds_qual_len = e_counts

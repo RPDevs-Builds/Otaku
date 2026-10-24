@@ -395,9 +395,12 @@ class Sources(BrowserBase):
         }
 
         if not source['byte_size']:
-            match = re.match(r'(\d+).(\d+) (\w+)', res['size'])
+            match = re.match(r'([\d.]+)\s*(\w+)', res['size'])
             if match:
-                source['byte_size'] = source_utils.convert_to_bytes(float(f'{match.group(1)}.{match.group(2)}'), match.group(3))
+                try:
+                    source['byte_size'] = source_utils.convert_to_bytes(float(match.group(1)), match.group(2))
+                except (ValueError, KeyError):
+                    pass
 
         if not cached:
             source['magnet'] = res['magnet']
