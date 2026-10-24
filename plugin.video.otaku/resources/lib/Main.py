@@ -24,6 +24,7 @@ import json
 import ast
 import sys
 import random
+import time
 
 from resources.lib import MetaBrowser
 from resources.lib.ui import control, database, utils
@@ -239,6 +240,7 @@ def _main_menu():
         (control.lang(30016), "top_100", 'top_100_anime.png', {}),
         (control.lang(30017), "genres", 'genres_&_tags.png', {}),
         (control.lang(30018), "search", 'search.png', {}),
+        (control.lang(30555), "my_cloud", 'tools.png', {}),
         (control.lang(30019), "tools", 'tools.png', {}),
     ]
 
@@ -261,6 +263,7 @@ def _tools_menu():
         (30076, 'wipe_addon_data', 'wipe_addon_data.png'),
         (30077, 'completed_sync', 'sync_completed.png'),
         (30078, 'download_manager', 'download_manager.png'),
+        (30555, 'my_cloud', 'tools.png'),
         (30079, 'sort_select', 'sort_select.png'),
         (30080, 'clear_selected_fanart', 'wipe_addon_data.png'),
     )
@@ -308,6 +311,15 @@ def add_next_up(items):
     """Add Next Up menu item if enabled in watchlist settings."""
     if control.getBool('watchlist.update.enabled') and control.getBool('nextup.enabled'):
         items.append((control.lang(30451), "next_up", 'next_up.png', {}))
+    return items
+
+
+def add_my_cloud(items):
+    """Add My Debrid Cloud menu item if enabled and at least one debrid is active."""
+    if control.getBool('interface.menu.my_cloud', default=True):
+        from resources.lib.debrid import debrid_cloud
+        if debrid_cloud.get_active_providers():
+            items.append((control.lang(30555), "my_cloud", 'tools.png', {}))
     return items
 
 
@@ -394,17 +406,25 @@ def add_watch_history(items):
         recent_history = history_data.get('history', [])[:10]
 
         if recent_history:
-            # Add a "Watch History" menu item that shows recent watches
+            # Add a "Watch History" menu item with dynamic artwork from most recent anime
             history_title = control.lang(30068)
-
-            # Use a generic anime icon or create a custom one for history
+            most_recent = recent_history[0]
+            art = {
+                'poster': most_recent.get('poster', ''),
+                'fanart': most_recent.get('fanart', ''),
+                'landscape': most_recent.get('landscape') or most_recent.get('thumb', ''),
+                'banner': most_recent.get('banner', ''),
+                'clearart': most_recent.get('clearart', ''),
+                'clearlogo': most_recent.get('clearlogo', ''),
+            }
+            icon = art['poster'] if art.get('poster') else 'watch_history.png'
             history_info = {
-                'title': 'Watch History',
-                'plot': 'View your recently watched anime',
+                'title': history_title,
+                'plot': f"Recently watched: {most_recent.get('title', '')}",
                 'mediatype': 'tvshow',
             }
 
-            items.append((history_title, 'watch_history/', 'watch_history.png', history_info))
+            items.append((history_title, 'watch_history/', icon, history_info, art))
 
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         pass
@@ -412,8 +432,8 @@ def add_watch_history(items):
     return items
 
 
-def save_to_watch_history(mal_id):
-    """Save an anime to watch history"""
+def save_to_watch_history(mal_id, episode=None, total_episodes=None):
+    """Save an anime to watch history with episode and timestamp tracking"""
     # if not control.getBool("interface.show_watch_history"):
     #     return
 
@@ -424,6 +444,13 @@ def save_to_watch_history(mal_id):
                 history_data = json.load(f)
         else:
             history_data = {'history': []}
+
+        # Find existing entry to preserve fields if needed
+        existing_entry = None
+        for h in history_data.get('history', []):
+            if str(h.get('UniqueIDs', {}).get('mal_id')) == str(mal_id):
+                existing_entry = h
+                break
 
         # Get anime metadata
         anime_data = database.get_show(mal_id)
@@ -437,6 +464,9 @@ def save_to_watch_history(mal_id):
         art = {}
         if show_meta and show_meta.get('art'):
             art = pickle.loads(show_meta['art'])
+
+        eps_count = int(total_episodes) if total_episodes else kodi_meta.get('episodes', 0)
+        watched_ep = int(episode) if episode is not None else (existing_entry.get('last_watched_episode') if existing_entry else None)
 
         # Create history entry with the same info as add_last_watched
         history_entry = {
@@ -458,7 +488,9 @@ def save_to_watch_history(mal_id):
             'trailer': kodi_meta.get('trailer', ''),
             'year': kodi_meta.get('year', ''),
             'premiered': kodi_meta.get('premiered', ''),
-            'episodes': kodi_meta.get('episodes', 0),
+            'episodes': eps_count,
+            'last_watched_episode': watched_ep,
+            'last_watched_at': int(time.time()),
             # Artwork - use art dict from shows_meta, fallback to kodi_meta
             'poster': art.get('poster') or kodi_meta.get('poster', ''),
             'tvshow.poster': art.get('poster') or kodi_meta.get('poster', ''),
@@ -476,6 +508,9 @@ def save_to_watch_history(mal_id):
 
         # Add new entry at the beginning
         history_data['history'].insert(0, history_entry)
+
+        # Cap history to 100 entries to maintain instant loading
+        history_data['history'] = history_data['history'][:100]
 
         # Save back to file
         with open(control.watch_history_json, 'w', encoding='utf-8') as f:
@@ -520,14 +555,29 @@ def open_anime_statistics(mal_id):
 
 @Route('animes/*')
 def ANIMES_PAGE(payload, params):
-    mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
     anime_general, content = MetaBrowser.get_anime_init(mal_id)
     control.draw_items(anime_general, content)
 
 
+def _extract_mal_id(payload):
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if not parts:
+        return ''
+    if parts[0].isdigit():
+        return parts[0]
+    if len(parts) >= 2 and parts[1].isdigit():
+        return parts[1]
+    for p in parts:
+        if p.isdigit():
+            return p
+    return parts[-1]
+
+
 @Route('find_recommendations/*')
 def FIND_RECOMMENDATIONS(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    mal_id = _extract_mal_id(payload)
     page = int(params.get('page', 1))
     items = BROWSER.get_recommendations(mal_id, page)
     control.draw_items(items, 'tvshows')
@@ -538,13 +588,13 @@ def FIND_RECOMMENDATIONS(payload, params):
 
 @Route('find_relations/*')
 def FIND_RELATIONS(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    mal_id = _extract_mal_id(payload)
     control.draw_items(BROWSER.get_relations(mal_id), 'tvshows')
 
 
 @Route('watch_order/*')
 def WATCH_ORDER(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    mal_id = _extract_mal_id(payload)
     control.draw_items(BROWSER.get_watch_order(mal_id), 'tvshows')
 
 
@@ -615,20 +665,16 @@ def VIEW_REVIEW(payload, params):
 
 @Route('anime_statistics/*')
 def ANIME_STATISTICS(payload, params):
-    parts = payload.strip('/').split('/')
-    if len(parts) >= 3:
-        mal_id = parts[-2]
-    elif len(parts) == 2:
-        mal_id = parts[-1]
-    else:
+    mal_id = _extract_mal_id(payload)
+    if not mal_id:
         control.notify(control.ADDON_NAME, control.lang(30463))
         return
     open_anime_statistics(mal_id)
 
 
-@Route('watch_history/')
+@multi_route('watch_history/', 'watch_history')
 def WATCH_HISTORY(payload, params):
-    """Display watch history"""
+    """Display watch history as an instant springboard into recently watched anime."""
     try:
         if not control.pathExists(control.watch_history_json):
             control.draw_items([], 'tvshows')
@@ -637,79 +683,143 @@ def WATCH_HISTORY(payload, params):
         with open(control.watch_history_json, 'r', encoding='utf-8') as f:
             history_data = json.load(f)
 
+        from resources.lib.ui import divide_flavors
+        show_dub_badge = control.getBool('divflavors.showdub')
+        mal_dub = divide_flavors._get_mal_dub() if show_dub_badge else {}
+
         history_items = []
         for entry in history_data.get('history', []):
             try:
-                # Get the mal_id from the correct location
-                mal_id = entry['UniqueIDs']['mal_id']
+                # Get the mal_id safely
+                mal_id = entry.get('UniqueIDs', {}).get('mal_id') or entry.get('mal_id')
+                if not mal_id:
+                    continue
 
-                # Format title
+                # Format title and badges
                 title = entry.get('title', '')
+                episodes = entry.get('episodes', 0)
+                last_ep = entry.get('last_watched_episode')
+
+                display_title = title
+                if show_dub_badge and mal_dub.get(str(mal_id)):
+                    display_title = f"{display_title} [COLOR blue](Dub)[/COLOR]"
+
+                if last_ep is not None:
+                    if episodes and episodes > 1:
+                        display_title = f"{display_title} [COLOR dodgerblue]Ep {last_ep}/{episodes}[/COLOR]"
+                    else:
+                        display_title = f"{display_title} [COLOR dodgerblue]Ep {last_ep}[/COLOR]"
+
+                plot = entry.get('plot', '')
+                if last_ep is not None:
+                    ep_str = f"Episode {last_ep}" + (f" of {episodes}" if episodes and episodes > 1 else "")
+                    plot = f"[B]Last Watched:[/B] {ep_str}\n\n{plot}"
 
                 info = {
                     'UniqueIDs': entry.get('UniqueIDs', {}),
-                    'title': entry.get('title', ''),
-                    'plot': entry.get('plot', ''),
+                    'title': display_title,
+                    'plot': plot,
                     'mpaa': entry.get('mpaa', ''),
                     'duration': entry.get('duration', 0),
                     'genre': entry.get('genre', []),
                     'studio': entry.get('studio', []),
                     'status': entry.get('status', ''),
-                    'mediatype': 'tvshow',  # Default to tvshow
+                    'mediatype': 'movie' if episodes == 1 else 'tvshow',
                     'rating': entry.get('rating', {}),
                     'cast': entry.get('cast', []),
                     'country': entry.get('country', []),
                     'trailer': entry.get('trailer', ''),
                     'year': entry.get('year', ''),
                     'premiered': entry.get('premiered', ''),
-                    'episodes': entry.get('episodes', 0),
+                    'episodes': episodes,
                 }
-
-                # Build the base item like MalBrowser does
 
                 # Handle fanart (may be a list)
                 fanart = entry.get('fanart', '')
                 if isinstance(fanart, list) and fanart:
                     fanart = random.choice(fanart)
+                elif isinstance(fanart, list):
+                    fanart = ''
 
                 # Handle banner with fallback to poster
                 banner = entry.get('banner', '')
                 if isinstance(banner, list) and banner:
                     banner = random.choice(banner)
+                elif isinstance(banner, list):
+                    banner = ''
                 if not banner:
                     banner = entry.get('poster', '')
 
-                base = {
-                    'name': title,
-                    'url': f'animes/{mal_id}/',
-                    'image': entry.get('poster', ''),
-                    'poster': entry.get('poster', ''),
-                    'fanart': fanart,
-                    'banner': banner,
-                    'info': info
-                }
+                # Context menu & springboard URLs
+                cm = []
+                if episodes == 1:
+                    base_url = f'play_movie/{mal_id}/'
+                    is_folder = False
+                    is_playable = True
+                    cm.append(('Play Movie', f'PlayMedia(plugin://{control.ADDON_ID}/play_movie/{mal_id}/)'))
+                else:
+                    click_action = control.getInt('interface.watchhistory.click')  # 0: open list, 1: play next, 2: resume last
+                    target_ep = last_ep if last_ep else 1
+                    next_ep = (last_ep + 1) if (last_ep is not None and (not episodes or last_ep < episodes)) else (last_ep or 1)
 
+                    if click_action == 1:
+                        base_url = f'play/{mal_id}/{next_ep}'
+                        is_folder = False
+                        is_playable = True
+                    elif click_action == 2:
+                        base_url = f'play/{mal_id}/{target_ep}'
+                        is_folder = False
+                        is_playable = True
+                    else:
+                        base_url = f'watchlist_to_ep/{mal_id}/{target_ep}' if last_ep is not None else f'animes/{mal_id}/'
+                        is_folder = True
+                        is_playable = False
+
+                    if last_ep is not None:
+                        cm.append((f'Play Next Episode (Ep {next_ep})', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/{next_ep})'))
+                        cm.append((f'Resume Episode {last_ep}', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/{last_ep})'))
+                    else:
+                        cm.append(('Play Episode 1', f'PlayMedia(plugin://{control.ADDON_ID}/play/{mal_id}/1)'))
+
+                    cm.append(('Browse Episodes', f'Container.Update(plugin://{control.ADDON_ID}/watchlist_to_ep/{mal_id}/{target_ep})'))
+
+                cm.append(('Remove from Watch History', f'RunPlugin(plugin://{control.ADDON_ID}/remove_watch_history/{mal_id})'))
+
+                landscape = ''
                 if entry.get('thumb'):
                     thumb = entry['thumb']
-                    base['landscape'] = random.choice(thumb) if isinstance(thumb, list) else thumb
+                    landscape = random.choice(thumb) if isinstance(thumb, list) and thumb else (thumb if not isinstance(thumb, list) else '')
+
+                clearart = ''
                 if entry.get('clearart'):
-                    clearart = entry['clearart']
-                    base['clearart'] = random.choice(clearart) if isinstance(clearart, list) else clearart
+                    ca = entry['clearart']
+                    clearart = random.choice(ca) if isinstance(ca, list) and ca else (ca if not isinstance(ca, list) else '')
+
+                clearlogo = ''
                 if entry.get('clearlogo'):
-                    clearlogo = entry['clearlogo']
-                    base['clearlogo'] = random.choice(clearlogo) if isinstance(clearlogo, list) else clearlogo
+                    cl = entry['clearlogo']
+                    clearlogo = random.choice(cl) if isinstance(cl, list) and cl else (cl if not isinstance(cl, list) else '')
 
-                # Simple movie detection: if episodes == 1, treat as movie
-                episodes = entry.get('episodes', 0)
+                poster = entry.get('poster', '') or entry.get('image', '')
+                image = entry.get('image', '') or poster
 
-                if episodes == 1:
-                    base['url'] = f'play_movie/{mal_id}/'
-                    base['info']['mediatype'] = 'movie'
-                    parsed_item = utils.parse_view(base, False, True, False)  # dub = False for now
-                else:
-                    parsed_item = utils.parse_view(base, True, False, False)   # dub = False for now
-
-                history_items.append(parsed_item)
+                parsed_item = utils.allocate_item(
+                    display_title,
+                    base_url,
+                    is_folder,
+                    is_playable,
+                    cm,
+                    image=image,
+                    info=info,
+                    fanart=fanart,
+                    poster=poster,
+                    landscape=landscape,
+                    banner=banner,
+                    clearart=clearart,
+                    clearlogo=clearlogo
+                )
+                if parsed_item:
+                    history_items.append(parsed_item)
 
             except Exception as e:
                 control.log(f"Error processing history entry: {str(e)}", "error")
@@ -746,6 +856,8 @@ def AIRING_CALENDAR(payload: str, params: dict):
 
         from resources.lib.windows.anichart import Anichart
         Anichart('anichart.xml', control.ADDON_PATH, calendar=formatted_calendar).doModal()
+    else:
+        control.notify(control.ADDON_NAME, 'Unable to load Airing Calendar data')
     control.exit_code()
 
 
@@ -881,7 +993,9 @@ def GENRES(payload, params):
         'genres_ona//': ('ona', 'ONA'),
         'genres_music//': ('music', 'MUSIC')
     }
-    genres, tags = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    genres = parts[0] if parts else ''
+    tags = parts[1] if len(parts) > 1 else ''
     page = int(params.get('page', 1))
     format = None
     base_key = plugin_url.split('/', 1)[0] + '//'
@@ -1154,7 +1268,9 @@ def SEARCH(payload, params):
 
 @Route('play/*')
 def PLAY(payload, params):
-    mal_id, episode = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
+    episode = parts[1] if len(parts) > 1 else '1'
     source_select = bool(params.get('source_select'))
     rescrape = bool(params.get('rescrape'))
     last_played = control.getSetting('last_played_source')
@@ -1207,6 +1323,26 @@ def PLAY(payload, params):
         elif context == 1:
             resume = None
 
+    # Guard against premature scraping of unaired episodes
+    episode_info = params.get('info', {})
+    aired_str = episode_info.get('aired')
+    if aired_str and not rescrape and not source_select:
+        try:
+            from datetime import date
+            aired_date = date.fromisoformat(aired_str[:10])
+            today = date.today()
+            if aired_date > today:
+                diff_days = (aired_date - today).days
+                day_str = "tomorrow" if diff_days == 1 else f"in {diff_days} days ({aired_date.strftime('%a, %b %d')})"
+                confirmed = control.yesno_dialog(
+                    control.ADDON_NAME,
+                    f"Episode {episode} is not scheduled to air until {day_str}.\n\nSearch for early releases or raw leaks anyway?"
+                )
+                if not confirmed:
+                    return control.exit_code()
+        except Exception:
+            pass
+
     sources = MetaBrowser.get_sources(mal_id, episode, 'show', rescrape, source_select)
     if sources:
         _mock_args = {"mal_id": mal_id, "episode": episode, 'play': True, 'resume': resume, 'context': rescrape or source_select, 'params': params}
@@ -1258,7 +1394,9 @@ def PLAY(payload, params):
 
 @Route('play_movie/*')
 def PLAY_MOVIE(payload, params):
-    mal_id, eps_watched = payload.rsplit("/")
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
+    eps_watched = parts[1] if len(parts) > 1 else '0'
     source_select = bool(params.get('source_select'))
     rescrape = bool(params.get('rescrape'))
     resume = params.get('resume')
@@ -1555,24 +1693,33 @@ def MARKED_AS_WATCHED(payload, params):
     from resources.lib.WatchlistIntegration import watchlist_update_episode
     import service
 
-    payload_list = payload.split("/")
-    if len(payload_list) == 2 and payload_list[1]:
-        mal_id, episode = payload_list
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) >= 2:
+        mal_id, episode = parts[0], parts[1]
+    elif parts:
+        mal_id, episode = parts[0], 1
     else:
-        mal_id = payload_list[0] if payload_list else ""
-        episode = 1
+        mal_id, episode = "", 1
 
     any_completed = watchlist_update_episode(mal_id, episode)
     if any_completed:
         control.sleep(3000)
         service.sync_watchlist(True)
 
+    # Synchronize Watch History
+    if mal_id:
+        try:
+            ep_int = int(episode) if str(episode).isdigit() else 1
+            save_to_watch_history(mal_id, ep_int)
+        except Exception as e:
+            control.log(f"Error saving to watch history: {e}", "warning")
+
     # Build notification showing updated watchlists
     enabled = control.enabled_watchlists()
     flavor_labels = {'anilist': 'AniList', 'kitsu': 'Kitsu', 'mal': 'MAL', 'simkl': 'Simkl'}
     updated_names = ', '.join([flavor_labels.get(f, f.capitalize()) for f in enabled]) if enabled else 'No Watchlist'
 
-    if len(payload_list) == 2 and payload_list[1]:
+    if len(parts) >= 2:
         control.notify(control.ADDON_NAME, f'Episode #{episode} was Marked as Watched in {updated_names}')
         control.execute(f'ActivateWindow(Videos,plugin://{control.ADDON_ID}/watchlist_to_ep/{mal_id}/{episode})')
     else:
@@ -1585,9 +1732,70 @@ def MARKED_AS_WATCHED(payload, params):
     control.exit_code()
 
 
+@multi_route(*_wildcard_browser_paths('mark_previous_watched'))
+def MARK_PREVIOUS_WATCHED(payload, params):
+    from resources.lib.WatchlistIntegration import watchlist_update_episode
+    import service
+
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) >= 2:
+        mal_id, ep_str = parts[0], parts[1]
+    else:
+        return
+    try:
+        target_ep = int(ep_str)
+    except (ValueError, TypeError):
+        return
+
+    # User confirmation dialog
+    show = database.get_show(mal_id)
+    title = ''
+    if show:
+        try:
+            kodi_meta = pickle.loads(show['kodi_meta'])
+            title = kodi_meta.get('title_userPreferred', '')
+        except Exception:
+            title = ''
+    anime_label = f" for '{title}'" if title else ""
+    confirmed = control.yesno_dialog(
+        "Mark Episodes as Watched",
+        f"Mark episodes 1 to {target_ep}{anime_label} as watched in your WatchLists and Watch History?"
+    )
+    if not confirmed:
+        return
+
+    # Update watchlist for target_ep (MAL/AniList/Simkl/Kitsu sets progress to target_ep)
+    any_completed = watchlist_update_episode(mal_id, target_ep)
+    if any_completed:
+        control.sleep(3000)
+        service.sync_watchlist(True)
+
+    # Save to watch history for target_ep
+    try:
+        save_to_watch_history(mal_id, target_ep)
+    except Exception as e:
+        control.log(f"Error saving to watch history: {e}", "warning")
+
+    # Invalidate cached eps_watched in kodi_meta so UI repaints playcounts
+    if show:
+        try:
+            kodi_meta = pickle.loads(show['kodi_meta'])
+            kodi_meta['eps_watched'] = target_ep
+            database.update_kodi_meta(mal_id, kodi_meta)
+        except Exception as e:
+            control.log(f"Error updating kodi_meta: {e}", "warning")
+
+    # Build notification showing updated watchlists
+    enabled = control.enabled_watchlists()
+    flavor_labels = {'anilist': 'AniList', 'kitsu': 'Kitsu', 'mal': 'MAL', 'simkl': 'Simkl'}
+    updated_names = ', '.join([flavor_labels.get(f, f.capitalize()) for f in enabled]) if enabled else 'Local History'
+    control.notify(control.ADDON_NAME, f"Episodes 1 to {target_ep} Marked as Watched in {updated_names}")
+    control.execute("Container.Refresh")
+
+
 @Route('delete_anime_database/*')
 def DELETE_ANIME_DATABASE(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    mal_id = _extract_mal_id(payload)
     database.remove_from_database('shows', mal_id)
     database.remove_from_database('episodes', mal_id)
     database.remove_from_database('show_data', mal_id)
@@ -1633,7 +1841,7 @@ def REFRESH(payload, params):
 
 @Route('fanart_select/*')
 def FANART_SELECT(payload, params):
-    path, mal_id, eps_watched = payload.rsplit("/")
+    mal_id = _extract_mal_id(payload)
     if not (episode := database.get_episode(mal_id)):
         MetaBrowser.get_anime_init(mal_id)
         episode = database.get_episode(mal_id)
@@ -1645,7 +1853,9 @@ def FANART_SELECT(payload, params):
 
 @Route('fanart/*')
 def FANART(payload: str, params: dict):
-    mal_id, select = payload.rsplit('/', 1)
+    parts = [p for p in payload.strip('/').split('/') if p]
+    mal_id = parts[0] if parts else ''
+    select = parts[1] if len(parts) > 1 else '0'
     episode = database.get_episode(mal_id)
     fanart = pickle.loads(episode['kodi_meta'])['image']['fanart'] or []
     fanart_display = fanart + ["None", "Random"]
@@ -1687,6 +1897,8 @@ def _collect_category_menu_items(menu_items_key, settings_key, extra_key_suffix)
         enabled_items = add_watch_history(enabled_items)
     if "next_up%s" % extra_key_suffix in enabled_ids:
         enabled_items = add_next_up(enabled_items)
+    if "my_cloud%s" % extra_key_suffix in enabled_ids or (menu_items_key == 'main' and control.getBool('interface.menu.my_cloud', default=True) and "my_cloud" not in enabled_ids):
+        enabled_items = add_my_cloud(enabled_items)
     for item in get_menu_items(menu_items_key):
         if item[1] in enabled_ids:
             enabled_items.append(item)
@@ -1717,10 +1929,27 @@ def _finalize_menu_list_items(menu_items):
                 clearlogo = kodi_meta['clearlogo']
                 base['clearlogo'] = random.choice(clearlogo) if isinstance(clearlogo, list) else clearlogo
             episodes = kodi_meta.get('episodes', 0)
-            if episodes == 1:
-                processed.append(utils.parse_view(base, False, True, False))
-            else:
-                processed.append(utils.parse_view(base, True, False, False))
+            is_folder = episodes != 1
+            is_playable = episodes == 1
+            processed.append(utils.allocate_item(
+                base['name'], base['url'], is_folder, is_playable, [],
+                base['image'], base['info'],
+                fanart=base.get('fanart'),
+                poster=base.get('poster'),
+                landscape=base.get('landscape'),
+                banner=base.get('banner'),
+                clearart=base.get('clearart'),
+                clearlogo=base.get('clearlogo')
+            ))
+        elif len(item) == 5:
+            name, url, image, info, art = item
+            fanart = art.get('fanart', '') if isinstance(art, dict) else ''
+            poster = art.get('poster', '') if isinstance(art, dict) else ''
+            landscape = art.get('landscape', '') if isinstance(art, dict) else ''
+            banner = art.get('banner', '') if isinstance(art, dict) else ''
+            clearart = art.get('clearart', '') if isinstance(art, dict) else ''
+            clearlogo = art.get('clearlogo', '') if isinstance(art, dict) else ''
+            processed.append(utils.allocate_item(name, url, True, False, [], image, info, fanart=fanart, poster=poster, landscape=landscape, banner=banner, clearart=clearart, clearlogo=clearlogo))
         else:
             name, url, image, info = item
             processed.append(utils.allocate_item(name, url, True, False, [], image, info))
@@ -1866,6 +2095,26 @@ def CLEAR_CACHE(payload, params):
     database.cache_clear()
 
 
+@Route('clear_scrapers_cache')
+def CLEAR_SCRAPERS_CACHE(payload, params):
+    control.setSetting('last_played_source', str(None))
+    database.cache_clear_scrapers()
+
+
+@Route('clear_debrid_cache')
+def CLEAR_DEBRID_CACHE(payload, params):
+    from resources.lib.debrid import debrid_cache
+    debrid_cache.clear_debrid_cache()
+    control.notify(
+        f'{control.ADDON_NAME}: Debrid Cache',
+        'Debrid cache successfully cleared', time=5000, sound=False)
+
+
+@Route('clear_metadata_cache')
+def CLEAR_METADATA_CACHE(payload, params):
+    database.cache_clear_metadata()
+
+
 @multi_route(*_CLEAR_SEARCH_HISTORY_ROUTES)
 def CLEAR_SEARCH_HISTORY(payload, params):
     format = _CLEAR_SEARCH_HISTORY_MAP.get(plugin_url)
@@ -1895,6 +2144,25 @@ def CLEAR_WATCH_HISTORY(payload, params):
         control.notify(f'{control.ADDON_NAME}: Watch History', 'Watch History Successfully Cleared', sound=False)
 
 
+@Route('remove_watch_history/*')
+def REMOVE_WATCH_HISTORY(payload, params):
+    mal_id = payload.strip('/')
+    try:
+        if control.pathExists(control.watch_history_json):
+            with open(control.watch_history_json, 'r', encoding='utf-8') as f:
+                history_data = json.load(f)
+            history_data['history'] = [
+                h for h in history_data.get('history', [])
+                if str(h.get('UniqueIDs', {}).get('mal_id') or h.get('mal_id')) != str(mal_id)
+            ]
+            with open(control.watch_history_json, 'w', encoding='utf-8') as f:
+                json.dump(history_data, f, ensure_ascii=False, indent=2)
+            control.refresh()
+            control.notify(f'{control.ADDON_NAME}: Watch History', 'Removed from Watch History', sound=False)
+    except Exception as e:
+        control.log(f"Error removing from watch history: {str(e)}", "error")
+
+
 @Route('clear_selected_fanart')
 def CLEAR_SELECTED_FANART(payload, params):
     silent = False
@@ -1915,6 +2183,57 @@ def CLEAR_SELECTED_FANART(payload, params):
 def REBUILD_DATABASE(payload, params):
     from resources.lib.ui.database_sync import SyncDatabase
     SyncDatabase().re_build_database()
+
+
+@Route('database_stats')
+def DATABASE_STATS(payload, params):
+    stats = database.get_database_stats()
+    control.textviewer_dialog('Otaku Database & Storage Telemetry', stats)
+
+
+@Route('scraper_stats')
+def SCRAPER_STATS(payload, params):
+    report = database.get_scraper_metrics_report()
+    control.textviewer_dialog('Otaku Scraper Health & Latency Dashboard', report)
+
+
+@Route('clear_scraper_metrics')
+def CLEAR_SCRAPER_METRICS(payload, params):
+    database.clear_scraper_metrics()
+    control.notify(control.ADDON_NAME, "Scraper telemetry metrics cleared", time=3000)
+
+
+@Route('vacuum_databases')
+def VACUUM_DATABASES(payload, params):
+    reclaimed = database.vacuum_all_databases()
+    reclaimed_str = database._format_db_bytes(reclaimed)
+    control.notify(
+        f'{control.ADDON_NAME}: Database',
+        f'Databases optimized. Reclaimed {reclaimed_str}',
+        time=5000, sound=False)
+
+
+@Route('check_db_integrity')
+def CHECK_DB_INTEGRITY(payload, params):
+    all_ok, results = database.check_database_integrity()
+    if all_ok:
+        control.notify(
+            f'{control.ADDON_NAME}: Database Integrity',
+            'Integrity check passed. All databases healthy.',
+            time=5000, sound=False)
+    else:
+        err_msg = "\n".join([f"• {name}: {status}" for name, status in results.items()])
+        control.textviewer_dialog('Database Integrity Issues Found', err_msg)
+
+
+@Route('sync_mappings')
+def SYNC_MAPPINGS(payload, params):
+    import service
+    service.update_mappings_db()
+    control.notify(
+        f'{control.ADDON_NAME}: Mappings',
+        'Anime ID Mappings successfully updated',
+        time=5000, sound=False)
 
 
 @Route('wipe_addon_data')
@@ -1944,6 +2263,112 @@ def SORT_SELECT(payload, params):
 def DOWNLOAD_MANAGER(payload, params):
     from resources.lib.windows.download_manager import DownloadManager
     DownloadManager('download_manager.xml', control.ADDON_PATH).doModal()
+
+
+def _draw_cloud_directory(provider, folder_id=None):
+    from resources.lib.debrid import debrid_cloud
+    raw_items = debrid_cloud.get_cloud_items(provider, folder_id)
+    if not raw_items:
+        control.draw_items([], 'files')
+        return
+
+    from urllib import parse
+    list_items = []
+    for itm in raw_items:
+        is_folder = itm.get('is_folder', False)
+        title = itm.get('name', 'Unknown')
+        cm = []
+        if is_folder:
+            url = f"my_cloud/{provider}/{itm['id']}"
+            is_playable = False
+            cm.append(('Delete from Cloud', f'RunPlugin(plugin://{control.ADDON_ID}/delete_cloud_item/{provider}/{itm["id"]})'))
+        else:
+            ref_encoded = parse.quote(itm.get('file_ref', ''), safe='')
+            url = f"play_cloud_file/{provider}/{itm['id']}/{ref_encoded}"
+            is_playable = True
+
+        info = {
+            'title': itm.get('title', title),
+            'plot': f"Provider: {provider.capitalize()}\nSize: {itm.get('size', 'Unknown')}",
+            'mediatype': 'video' if not is_folder else 'files'
+        }
+        item_obj = utils.allocate_item(title, url, is_folder, is_playable, cm, 'tools.png', info)
+        list_items.append(item_obj)
+
+    view_type = 'addons' if control.getBool('interface.content_type') else ''
+    control.draw_items(list_items, view_type)
+
+
+@multi_route('my_cloud', 'my_cloud/')
+def MY_CLOUD(payload, params):
+    from resources.lib.debrid import debrid_cloud
+    providers = debrid_cloud.get_active_providers()
+    if not providers:
+        control.notify(control.ADDON_NAME, "No active Debrid accounts found", icon=control.ADDON_ICON)
+        item = utils.allocate_item("No Debrid Accounts Enabled (Configure in Settings)", "settings", False, False, [], 'tools.png')
+        control.draw_items([item], '')
+        return
+
+    if len(providers) == 1:
+        provider = list(providers.keys())[0]
+        _draw_cloud_directory(provider, None)
+    else:
+        items = []
+        for p_key, p_name in providers.items():
+            items.append(utils.allocate_item(f"{p_name} Cloud", f"my_cloud/{p_key}", True, False, [], 'tools.png', {'title': f"{p_name} Cloud"}))
+        view_type = 'addons' if control.getBool('interface.content_type') else ''
+        control.draw_items(items, view_type)
+
+
+@Route('my_cloud/*')
+def MY_CLOUD_BROWSER(payload, params):
+    parts = [p for p in payload.strip('/').split('/') if p]
+    provider = parts[0] if parts else ''
+    folder_id = parts[1] if len(parts) > 1 else None
+    _draw_cloud_directory(provider, folder_id)
+
+
+@Route('play_cloud_file/*')
+def PLAY_CLOUD_FILE(payload, params):
+    import xbmcgui
+    import xbmcplugin
+    from urllib import parse
+    from resources.lib.debrid import debrid_cloud
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) < 3:
+        control.notify(control.ADDON_NAME, "Invalid cloud file reference", icon=control.ADDON_ICON)
+        return control.exit_code()
+
+    provider = parts[0]
+    item_id = parts[1]
+    file_ref = parse.unquote(parts[2])
+
+    stream_url = debrid_cloud.resolve_stream_url(provider, item_id, file_ref)
+    if not stream_url:
+        control.notify(control.ADDON_NAME, f"Failed to resolve {provider.capitalize()} streaming link", icon=control.ADDON_ICON)
+        return control.exit_code()
+
+    item = xbmcgui.ListItem(path=stream_url)
+    item.setProperty('IsPlayable', 'true')
+    xbmcplugin.setResolvedUrl(control.HANDLE, True, item)
+
+
+@Route('delete_cloud_item/*')
+def DELETE_CLOUD_ITEM(payload, params):
+    from resources.lib.debrid import debrid_cloud
+    parts = [p for p in payload.strip('/').split('/') if p]
+    if len(parts) < 2:
+        return
+    provider = parts[0]
+    item_id = parts[1]
+    confirmed = control.yesno_dialog(control.ADDON_NAME, f"Delete this item from your {provider.capitalize()} cloud?")
+    if confirmed:
+        success = debrid_cloud.delete_cloud_item(provider, item_id)
+        if success:
+            control.notify(control.ADDON_NAME, "Item removed from cloud", icon=control.ADDON_ICON)
+            control.refresh()
+        else:
+            control.notify(control.ADDON_NAME, "Failed to delete item from cloud", icon=control.ADDON_ICON)
 
 
 @Route('import_settings')

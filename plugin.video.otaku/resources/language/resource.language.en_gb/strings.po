@@ -368,7 +368,7 @@ msgid ""
 msgstr ""
 
 msgctxt "#30086"
-msgid "Cache"
+msgid "Cache & Database"
 msgstr ""
 
 msgctxt "#30087"
@@ -1963,4 +1963,292 @@ msgstr ""
 
 msgctxt "#30486"
 msgid "AnimePahe Alt"
+msgstr ""
+
+msgctxt "#30487"
+msgid "Scrapers Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30488"
+msgid "Torrents Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30489"
+msgid "Cache Settings"
+msgstr ""
+
+msgctxt "#30490"
+msgid "Clear All Cache"
+msgstr ""
+
+msgctxt "#30491"
+msgid "Clear Scrapers Cache Only"
+msgstr ""
+
+msgctxt "#30492"
+msgid "Clear Debrid Cache Only"
+msgstr ""
+
+msgctxt "#30493"
+msgid "Metadata Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30494"
+msgid "Airing Calendar Cache TTL (Hours)"
+msgstr ""
+
+msgctxt "#30495"
+msgid "Clear Metadata Cache Only"
+msgstr ""
+
+msgctxt "#30496"
+msgid "Cache Actions"
+msgstr ""
+
+msgctxt "#30497"
+msgid "Cache Duration (TTL)"
+msgstr ""
+
+msgctxt "#30498"
+msgid "Database Maintenance"
+msgstr ""
+
+msgctxt "#30499"
+msgid "Advanced SQLite Engine PRAGMAs"
+msgstr ""
+
+msgctxt "#30500"
+msgid "Database & Storage Telemetry"
+msgstr ""
+
+msgctxt "#30501"
+msgid "Vacuum & Optimize All Databases"
+msgstr ""
+
+msgctxt "#30502"
+msgid "Verify Database Integrity"
+msgstr ""
+
+msgctxt "#30503"
+msgid "Re-Sync Anime ID Mappings"
+msgstr ""
+
+msgctxt "#30504"
+msgid "SQLite Memory Cache Size (MB)"
+msgstr ""
+
+msgctxt "#30505"
+msgid "SQLite MMAP Memory Limit (MB)"
+msgstr ""
+
+msgctxt "#30506"
+msgid "SQLite Synchronous Mode"
+msgstr ""
+
+msgctxt "#30507"
+msgid "Store Temporary Tables in RAM"
+msgstr ""
+
+msgctxt "#30508"
+msgid "Scraper Concurrency Workers"
+msgstr ""
+
+msgctxt "#30509"
+msgid "Enhanced Source Badges (Color-coded)"
+msgstr ""
+
+msgctxt "#30510"
+msgid "Configure low-level SQLite database engine parameters for memory caching, I/O speed, and crash resilience."
+msgstr ""
+
+msgctxt "#30511"
+msgid "Amount of RAM allocated for SQLite page caching. Higher values accelerate queries on large databases (Default: 16 MB)."
+msgstr ""
+
+msgctxt "#30512"
+msgid "Maximum memory-mapped I/O size. Lower limits (16-32 MB) prevent memory pressure and crashes on low-RAM devices (Default: 32 MB)."
+msgstr ""
+
+msgctxt "#30513"
+msgid "Disk synchronization mode. NORMAL provides full crash-resilience in WAL mode with maximum write speed (Default: NORMAL)."
+msgstr ""
+
+msgctxt "#30514"
+msgid "Keeps SQLite temporary sorting tables and indices in RAM instead of writing temporary files to disk storage (Default: Enabled)."
+msgstr ""
+
+msgctxt "#30515"
+msgid "Maximum concurrent background worker threads for scraping sources and building directory listings (Default: 8)."
+msgstr ""
+
+msgctxt "#30516"
+msgid "Display color-coded quality, debrid provider, audio, and codec badges on sources in the selection dialog (Default: Enabled)."
+msgstr ""
+
+msgctxt "#30517"
+msgid "Inspect database sizes, cached item counts, indexed records, and SQLite engine parameters."
+msgstr ""
+
+msgctxt "#30518"
+msgid "Defragments database files, rebuilds internal indexes, and reclaims freed storage space."
+msgstr ""
+
+msgctxt "#30519"
+msgid "Scans all SQLite database files for corruption, missing pages, or indexing errors."
+msgstr ""
+
+msgctxt "#30520"
+msgid "Downloads the latest anime cross-platform ID mappings database from GitHub."
+msgstr ""
+
+msgctxt "#30521"
+msgid "Reuse Season Packs for Subsequent Episodes"
+msgstr ""
+
+msgctxt "#30522"
+msgid "Automatically reuses previously selected season pack torrents for subsequent episodes without re-scraping."
+msgstr ""
+
+msgctxt "#30523"
+msgid "Match Quality & Release Group on Next Up"
+msgstr ""
+
+msgctxt "#30524"
+msgid "Prioritizes next-up sources matching the previously selected video resolution and release group."
+msgstr ""
+
+msgctxt "#30525"
+msgid "Prefer Same Embed Provider on Next Up"
+msgstr ""
+
+msgctxt "#30526"
+msgid "Prioritizes embeds from the same provider and audio flavor (Sub/Dub) for subsequent episodes."
+msgstr ""
+
+msgctxt "#30527"
+msgid "Terminate on Cached Torrents"
+msgstr ""
+
+msgctxt "#30528"
+msgid "Stop scraping immediately once cached debrid torrents are found."
+msgstr ""
+
+msgctxt "#30529"
+msgid "Watch History Click Action"
+msgstr ""
+
+msgctxt "#30530"
+msgid "Choose action when selecting an anime from the Watch History springboard."
+msgstr ""
+
+msgctxt "#30531"
+msgid "Open Episode List"
+msgstr ""
+
+msgctxt "#30532"
+msgid "Play Next Episode"
+msgstr ""
+
+msgctxt "#30533"
+msgid "Resume / Replay Episode"
+msgstr ""
+
+msgctxt "#30534"
+msgid "Zero-Click Binge Mode"
+msgstr ""
+
+msgctxt "#30535"
+msgid "Automatically transition to the next episode at the outro without displaying the interactive countdown dialog."
+msgstr ""
+
+msgctxt "#30536"
+msgid "Source Details"
+msgstr ""
+
+msgctxt "#30537"
+msgid "Filter Sources"
+msgstr ""
+
+msgctxt "#30538"
+msgid "All Sources"
+msgstr ""
+
+msgctxt "#30539"
+msgid "Cached Only"
+msgstr ""
+
+msgctxt "#30540"
+msgid "Uncached Only"
+msgstr ""
+
+msgctxt "#30541"
+msgid "Embeds Only"
+msgstr ""
+
+msgctxt "#30542"
+msgid "Scraper Health & Latency Dashboard"
+msgstr ""
+
+msgctxt "#30543"
+msgid "View average latency, response times, and success rates for all scrapers."
+msgstr ""
+
+msgctxt "#30544"
+msgid "Hide Spoiler Thumbnails"
+msgstr ""
+
+msgctxt "#30545"
+msgid "Shield episode thumbnails for unwatched episodes to prevent plot spoilers."
+msgstr ""
+
+msgctxt "#30546"
+msgid "Shield Artwork Mode"
+msgstr ""
+
+msgctxt "#30547"
+msgid "Series Fanart (Backdrop)"
+msgstr ""
+
+msgctxt "#30548"
+msgid "Series Poster"
+msgstr ""
+
+msgctxt "#30549"
+msgid "Mark Episodes Up To Here as Watched"
+msgstr ""
+
+msgctxt "#30550"
+msgid "Show 'Mark Episodes Up To Here as Watched' in episode context menu."
+msgstr ""
+
+msgctxt "#30551"
+msgid "Clear Scraper Telemetry"
+msgstr ""
+
+msgctxt "#30552"
+msgid "Reset all recorded scraper response latency and success statistics."
+msgstr ""
+
+msgctxt "#30553"
+msgid "Show Airing Countdown on Upcoming Episodes"
+msgstr ""
+
+msgctxt "#30554"
+msgid "Display days and weekday countdown until future episodes air on currently airing anime."
+msgstr ""
+
+msgctxt "#30555"
+msgid "My Debrid Cloud"
+msgstr ""
+
+msgctxt "#30556"
+msgid "Browse and stream active torrents and cached files directly from your Debrid cloud."
+msgstr ""
+
+msgctxt "#30557"
+msgid "Show My Debrid Cloud in Main Menu"
+msgstr ""
+
+msgctxt "#30558"
+msgid "Delete from Cloud"
 msgstr ""

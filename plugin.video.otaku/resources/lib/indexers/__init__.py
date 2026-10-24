@@ -13,8 +13,39 @@ def parse_episodes(res, eps_watched, dub_data=None):
     if control.getBool('interface.cleantitles') and parsed['info'].get('playcount') != 1:
         parsed['info']['title'] = f'Episode {res["number"]}'
         parsed['info']['plot'] = None
+    if control.getBool('interface.spoilers.hide_thumbs') and parsed['info'].get('playcount') != 1:
+        shield_mode = control.getInt('interface.spoilers.shield_mode')
+        img_dict = parsed.get('image') if isinstance(parsed.get('image'), dict) else {}
+        shield_art = img_dict.get('fanart') if shield_mode == 0 else img_dict.get('poster')
+        if not shield_art:
+            shield_art = img_dict.get('poster') or img_dict.get('fanart')
+        if shield_art:
+            if isinstance(parsed.get('image'), dict):
+                parsed['image']['thumb'] = shield_art
+                parsed['image']['icon'] = shield_art
+            else:
+                parsed['image'] = shield_art
     code = endpoints.get_second_label(parsed['info'], dub_data, res['filler'])
     parsed['info']['code'] = code
+    if control.getBool('interface.aired.show_countdown', default=True):
+        aired_str = parsed['info'].get('aired')
+        if aired_str:
+            try:
+                aired_date = date.fromisoformat(aired_str[:10])
+                today = date.today()
+                if aired_date > today:
+                    diff_days = (aired_date - today).days
+                    if diff_days == 1:
+                        air_badge = "[COLOR gray](Airs Tomorrow)[/COLOR]"
+                    else:
+                        weekday_name = aired_date.strftime("%a")
+                        air_badge = f"[COLOR gray](Airs {weekday_name} in {diff_days}d)[/COLOR]"
+                    parsed['name'] = f"{parsed['name']} {air_badge}"
+                    parsed['info']['title'] = parsed['name']
+                    parsed['info']['unaired'] = True
+                    parsed['info']['aired_date'] = aired_str
+            except (ValueError, TypeError, Exception):
+                pass
     return parsed
 
 
@@ -99,4 +130,25 @@ def update_database(mal_id, update_time, res, url, image, info, season, episode,
     if control.getBool('interface.cleantitles') and info.get('playcount') != 1:
         parsed['info']['title'] = f'Episode {res["episode"]}'
         parsed['info']['plot'] = None
+
+    if control.getBool('interface.aired.show_countdown', default=True):
+        aired_str = info.get('aired')
+        if aired_str:
+            try:
+                aired_date = date.fromisoformat(aired_str[:10])
+                today = date.today()
+                if aired_date > today:
+                    diff_days = (aired_date - today).days
+                    if diff_days == 1:
+                        air_badge = "[COLOR gray](Airs Tomorrow)[/COLOR]"
+                    else:
+                        weekday_name = aired_date.strftime("%a")
+                        air_badge = f"[COLOR gray](Airs {weekday_name} in {diff_days}d)[/COLOR]"
+                    parsed['name'] = f"{parsed['name']} {air_badge}"
+                    parsed['info']['title'] = parsed['name']
+                    parsed['info']['unaired'] = True
+                    parsed['info']['aired_date'] = aired_str
+            except (ValueError, TypeError, Exception):
+                pass
+
     return parsed

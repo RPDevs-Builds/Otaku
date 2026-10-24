@@ -65,11 +65,6 @@
 				</setting>
 				<setting id="general.smart.scroll.enable" type="boolean" label="30101" help="">
 					<level>0</level>
-					<default>false</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="general.kodi.cache" type="boolean" label="30459" help="">
-					<level>0</level>
 					<default>true</default>
 					<control type="toggle"/>
 				</setting>
@@ -83,9 +78,50 @@
 					<default>false</default>
 					<control type="toggle"/>
 				</setting>
+				<setting id="interface.spoilers.hide_thumbs" type="boolean" label="30544" help="30545">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="interface.spoilers.shield_mode" type="integer" label="30546" help="">
+					<level>0</level>
+					<default>0</default>
+					<constraints>
+						<options>
+							<option label="30547">0</option>
+							<option label="30548">1</option>
+						</options>
+					</constraints>
+					<control type="spinner" format="string"/>
+					<dependencies>
+						<dependency type="enable" setting="interface.spoilers.hide_thumbs">true</dependency>
+					</dependencies>
+				</setting>
+				<setting id="interface.watchhistory.click" type="integer" label="30529" help="30530">
+					<level>0</level>
+					<default>0</default>
+					<constraints>
+						<options>
+							<option label="30531">0</option>
+							<option label="30532">1</option>
+							<option label="30533">2</option>
+						</options>
+					</constraints>
+					<control type="spinner" format="string"/>
+				</setting>
 				<setting id="interface.aired_episodes" type="boolean" label="30448" help="">
 					<level>0</level>
 					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="interface.aired.show_countdown" type="boolean" label="30553" help="30554">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="interface.menu.my_cloud" type="boolean" label="30557" help="30556">
+					<level>0</level>
+					<default>true</default>
 					<control type="toggle"/>
 				</setting>
 				<setting id="interface.content_type" type="boolean" label="30387" help="30388">
@@ -988,6 +1024,18 @@
 						<heading>30185</heading>
 					</control>
 				</setting>
+				<setting id="scraper.concurrency.workers" type="integer" label="30508" help="30515">
+					<level>0</level>
+					<default>8</default>
+					<constraints>
+						<minimum>2</minimum>
+						<step>1</step>
+						<maximum>16</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
 				<!-- <setting id="general.fuzzy" type="integer" label="30321" help="30322">
 					<level>0</level>
 					<default>40</default>
@@ -1007,6 +1055,11 @@
 					<control type="toggle"/>
 				</setting>
 				<setting id="general.terminate.onlocal" type="boolean" label="30285" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="general.terminate.ontorrent" type="boolean" label="30527" help="30528">
 					<level>0</level>
 					<default>false</default>
 					<control type="toggle"/>
@@ -1082,6 +1135,196 @@
 			</group>
 		</category>
 
+		<!-- Cache & Database -->
+		<category id="Cache" label="30086" help="">
+			<!-- Cache Actions -->
+			<group id="1" label="30496" help="">
+				<setting id="clear_cache_all" type="action" label="30490" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_cache?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="clear_cache_scrapers" type="action" label="30491" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_scrapers_cache?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="clear_cache_debrid" type="action" label="30492" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_debrid_cache?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="clear_cache_metadata" type="action" label="30495" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_metadata_cache?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+			</group>
+
+			<!-- Cache Duration (TTL) -->
+			<group id="2" label="30497" help="">
+				<setting id="general.kodi.cache" type="boolean" label="30459" help="">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="cache.scrapers.ttl" type="integer" label="30487" help="">
+					<level>0</level>
+					<default>8</default>
+					<constraints>
+						<minimum>1</minimum>
+						<step>1</step>
+						<maximum>72</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="cache.torrents.ttl" type="integer" label="30488" help="">
+					<level>0</level>
+					<default>24</default>
+					<constraints>
+						<minimum>1</minimum>
+						<step>1</step>
+						<maximum>168</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="cache.metadata.ttl" type="integer" label="30493" help="">
+					<level>0</level>
+					<default>24</default>
+					<constraints>
+						<minimum>1</minimum>
+						<step>1</step>
+						<maximum>72</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="cache.calendar.ttl" type="integer" label="30494" help="">
+					<level>0</level>
+					<default>24</default>
+					<constraints>
+						<minimum>1</minimum>
+						<step>1</step>
+						<maximum>48</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+			</group>
+
+			<!-- Database Maintenance -->
+			<group id="3" label="30498" help="">
+				<setting id="database_stats" type="action" label="30500" help="30517">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/database_stats?setting=true)</data>
+					<control type="button" format="action">
+						<close>false</close>
+					</control>
+				</setting>
+				<setting id="scraper_stats" type="action" label="30542" help="30543">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/scraper_stats?setting=true)</data>
+					<control type="button" format="action">
+						<close>false</close>
+					</control>
+				</setting>
+				<setting id="clear_scraper_metrics" type="action" label="30551" help="30552">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/clear_scraper_metrics?setting=true)</data>
+					<control type="button" format="action">
+						<close>false</close>
+					</control>
+				</setting>
+				<setting id="vacuum_databases" type="action" label="30501" help="30518">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/vacuum_databases?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="check_db_integrity" type="action" label="30502" help="30519">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/check_db_integrity?setting=true)</data>
+					<control type="button" format="action">
+						<close>false</close>
+					</control>
+				</setting>
+				<setting id="sync_mappings" type="action" label="30503" help="30520">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/sync_mappings?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+				<setting id="rebuild_database_cache_tab" type="action" label="30075" help="">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.otaku/rebuild_database?setting=true)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+				</setting>
+			</group>
+
+			<!-- Advanced SQLite Engine PRAGMAs -->
+			<group id="4" label="30499" help="30510">
+				<setting id="db.sqlite.cache_size_mb" type="integer" label="30504" help="30511">
+					<level>1</level>
+					<default>16</default>
+					<constraints>
+						<minimum>2</minimum>
+						<step>2</step>
+						<maximum>64</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="db.sqlite.mmap_size_mb" type="integer" label="30505" help="30512">
+					<level>1</level>
+					<default>32</default>
+					<constraints>
+						<minimum>0</minimum>
+						<step>16</step>
+						<maximum>256</maximum>
+					</constraints>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="db.sqlite.synchronous" type="string" label="30506" help="30513">
+					<level>1</level>
+					<default>1</default>
+					<constraints>
+						<options>
+							<option label="OFF">0</option>
+							<option label="NORMAL">1</option>
+							<option label="FULL">2</option>
+						</options>
+					</constraints>
+					<control type="spinner" format="string"/>
+				</setting>
+				<setting id="db.sqlite.temp_store_ram" type="boolean" label="30507" help="30514">
+					<level>1</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
+			</group>
+		</category>
+
 		<!-- Playback -->
 		<category id="Playback" label="30138" help="">
 			<!-- General Playback -->
@@ -1090,6 +1333,30 @@
 					<level>0</level>
 					<default>true</default>
 					<control type="toggle"/>
+				</setting>
+				<setting id="smartplay.reuse_season_pack" type="boolean" label="30521" help="30522">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="enable" setting="general.smartplay">true</dependency>
+					</dependencies>
+				</setting>
+				<setting id="smartplay.match_quality" type="boolean" label="30523" help="30524">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="enable" setting="general.smartplay">true</dependency>
+					</dependencies>
+				</setting>
+				<setting id="smartplay.prefer_same_embed" type="boolean" label="30525" help="30526">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="enable" setting="general.smartplay">true</dependency>
+					</dependencies>
 				</setting>
 				<setting id="general.playstyle.movie" type="integer" label="30139" help="">
 					<level>0</level>
@@ -1115,6 +1382,11 @@
 						<dependency type="enable" setting="general.smartplay">false</dependency>
 					</dependencies>
 					<control type="spinner" format="string"/>
+				</setting>
+				<setting id="interface.source_select.badges" type="boolean" label="30509" help="30516">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
 				</setting>
 			</group>
 
@@ -1368,6 +1640,14 @@
 					<level>0</level>
 					<default>true</default>
 					<control type="toggle"/>
+				</setting>
+				<setting id="smartplay.binge_mode" type="boolean" label="30534" help="30535">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="enable" setting="smartplay.playingnextdialog">true</dependency>
+					</dependencies>
 				</setting>
 				<setting id="skipoutro.aniskip.enable" type="boolean" label="30189" help="">
 					<level>0</level>
@@ -2629,12 +2909,13 @@
 			<group id="1" label="30407" help="">
 				<setting id="menu.mainmenu.config" type="list[string]" label="30404" help="">
 					<level>0</level>
-					<default>last_watched,watch_history,next_up,airing_calendar,airing_last_season,airing_this_season,airing_next_season,trending,popular,voted,favourites,top_100,genres,search,tools</default>
+					<default>last_watched,watch_history,next_up,my_cloud,airing_calendar,airing_last_season,airing_this_season,airing_next_season,trending,popular,voted,favourites,top_100,genres,search,tools</default>
 					<constraints>
 						<options>
 							<option label="30000">last_watched</option>
 							<option label="30068">watch_history</option>
 							<option label="30451">next_up</option>
+							<option label="30555">my_cloud</option>
 							<option label="30001">airing_calendar</option>
 							<option label="30002">airing_last_season</option>
 							<option label="30003">airing_this_season</option>
@@ -3510,9 +3791,19 @@
 					<default>true</default>
 					<control type="toggle"/>
 				</setting>
+				<setting id="context.otaku.markpreviouswatched" type="boolean" label="30549" help="30550">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
 				<setting id="context.otaku.fanartselect" type="boolean" label="30254" help="">
 					<level>0</level>
 					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="context.otaku.clearcache" type="boolean" label="30072" help="">
+					<level>0</level>
+					<default>true</default>
 					<control type="toggle"/>
 				</setting>
 			</group>
