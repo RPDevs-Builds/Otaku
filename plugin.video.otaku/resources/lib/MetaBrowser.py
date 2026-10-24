@@ -1,6 +1,6 @@
 import pickle
 
-from resources.lib.ui import control, database
+from resources.lib.ui import control, database, source_utils
 
 # Lazy browser initialization for improved startup performance
 _BROWSER_INSTANCE = None
@@ -99,6 +99,21 @@ def get_sources(mal_id, episode, media_type, rescrape=False, source_select=False
     # Pre-fetch season and part once so scrapers don't each do redundant DB lookups
     episode_data = database.get_episode(mal_id)
     season = episode_data.get('season') if episode_data else None
+
+    # Fast-path: Check for cached season pack continuity
+    if media_type != 'movie' and not rescrape and not source_select and control.getBool('smartplay.reuse_season_pack', default=True):
+        cached_pack = database.get_season_pack(mal_id, season)
+        if cached_pack:
+            total_eps = kodi_meta.get('episodes')
+            if source_utils.season_pack_covers_episode(cached_pack, episode, total_eps):
+                control.log(f"MetaBrowser: Reusing cached season pack for {mal_id} ep {episode}: {cached_pack.get('release_title')}", level='info')
+                pack_candidate = dict(cached_pack)
+                pack_candidate['episode_re'] = str(episode)
+                pack_candidate.pop('filename', None)
+                return [pack_candidate]
+            else:
+                control.log(f"MetaBrowser: Cached season pack does not cover ep {episode}, clearing pack cache and rescanning", level='info')
+                database.clear_season_pack(mal_id, season)
 
     part = None
     mal_mapping = database.get_mappings(mal_id, 'mal_id')

@@ -129,55 +129,55 @@ class Resolver(BaseWindow):
 
             # Batch property updates
             self._update_source_properties(i)
+            stream_link = None
 
             if 'uncached' in i['type']:
                 stream_link = self.resolve_uncache(i)
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    break
 
-            if i['type'] in ['torrent', 'cloud', 'hoster']:
+            elif i['type'] in ['torrent', 'cloud', 'hoster']:
                 if i['type'] == 'cloud' and i['debrid_provider'] == 'Alldebrid':
                     stream_link = i['hash']
                 else:
                     stream_link = self.resolve_source(self.resolvers[i['debrid_provider']], i)
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    break
 
             elif i['type'] == 'direct':
                 stream_link = i['hash']
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    if i.get('subs'):
-                        self.return_data['sub'] = i['subs']
-                    break
 
             elif i['type'] == 'embed':
                 from resources.lib.ui import embed_extractor
                 stream_link = embed_extractor.load_video_from_url(i['hash'])
-                if stream_link:
-                    self.return_data['link'] = stream_link
-                    break
 
             elif i['type'] == 'local':
                 stream_link = i['hash']
-                self.return_data = {
+                self.return_data['linkinfo'] = {
                     'source': i,
                     'url': stream_link,
                     'local': True,
                     'headers': {}
                 }
+                self.return_data['link'] = stream_link
                 break
 
-        if self.return_data.get('local'):
-            self.return_data['linkinfo'] = self.return_data
+            if stream_link:
+                self.return_data['link'] = stream_link
+                try:
+                    verified_linkinfo = self.prefetch_play_link(stream_link)
+                except Exception as e:
+                    control.log(f"Resolver: prefetch error for {i.get('provider')}: {e}", level='warning')
+                    verified_linkinfo = None
+
+                if verified_linkinfo:
+                    self.return_data['linkinfo'] = verified_linkinfo
+                    if i.get('subs'):
+                        self.return_data['sub'] = i['subs']
+                    break
+                else:
+                    control.log(f"Resolver: candidate {i.get('provider')} failed prefetch/verification, advancing to next candidate", level='warning')
+                    self.return_data['link'] = None
+
+        if self.return_data.get('linkinfo'):
+            ffprobe_chapters.attach_to_linkinfo(self.return_data['linkinfo'])
         else:
-            self.return_data['linkinfo'] = self.prefetch_play_link(self.return_data['link'])
-
-        ffprobe_chapters.attach_to_linkinfo(self.return_data.get('linkinfo'))
-
-        if not self.return_data['linkinfo']:
             self.return_data = False
 
         if self.play and isinstance(self.return_data, dict):
@@ -339,7 +339,14 @@ class Resolver(BaseWindow):
             stream_link = {}
 
             if source['type'] == 'torrent':
-                stream_link = api.resolve_single_magnet(hash_, magnet, source['episode_re'], self.pack_select, source.get('filename'))
+                filename = source.get('filename')
+                if filename:
+                    ep_reg = source_utils.get_cache_check_reg(self.episode)
+                    clean_fname = re.sub(r'\[.*?\]', '', filename.split('/')[-1])
+                    if not ep_reg.search(clean_fname):
+                        filename = None
+                ep_re = source.get('episode_re') or str(self.episode)
+                stream_link = api.resolve_single_magnet(hash_, magnet, ep_re, self.pack_select, filename)
             elif source['type'] == 'cloud':
                 hash_ = api.resolve_cloud(source, self.pack_select)
                 if hash_:
@@ -378,13 +385,23 @@ class Resolver(BaseWindow):
                 headers["Cookie"] = cookie
                 headers["User-Agent"] = ua
 
-        # Use HEAD request instead of GET - only fetches headers, not the body
-        # This is much faster for debrid CDN links (avoids downloading video data)
-        response = client.head(url, headers=headers, timeout=30)
-        if not response or str(response.status_code) not in ['200', '201']:
-            status = response.status_code if response else 'failed'
-            raise Exception('could not resolve %s. status_code=%s' %
-                            (link, status))
+        response = None
+        try:
+            response = client.head(url, headers=headers, timeout=15)
+        except Exception as e:
+            control.log(f"Resolver: HEAD request failed for {url}: {e}", level='warning')
+
+        if not response or str(response.status_code) not in ['200', '201', '206']:
+            try:
+                get_headers = headers.copy()
+                get_headers['Range'] = 'bytes=0-0'
+                response = client.get(url, headers=get_headers, timeout=15)
+            except Exception as e:
+                control.log(f"Resolver: GET fallback failed for {url}: {e}", level='warning')
+
+        if not response or str(response.status_code) not in ['200', '201', '206']:
+            control.log(f"Resolver: could not verify {url}, status={response.status_code if response else 'failed'}", level='warning')
+            return None
         resp_headers = dict(response.headers)
         if 'Content-Type' not in resp_headers.keys():
             if 'Content-Length' not in resp_headers.keys():

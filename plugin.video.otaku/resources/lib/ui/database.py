@@ -1,3 +1,4 @@
+from resources.lib.ui import source_utils
 """
 database.py - Otaku Database & Caching Layer
 =============================================
@@ -163,6 +164,22 @@ def _init_cache_table():
 #  General Cache - 3-Tier: RAM → SQLite → Fresh API Call
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _is_empty_result(val):
+    """Detect empty results that should not poison the cache.
+    Includes None, empty sequences, empty dicts, or torrent dicts with empty buckets."""
+    if not val:
+        return True
+    if isinstance(val, dict):
+        if not any(val.values()):
+            return True
+        if all(isinstance(v, (list, tuple, set, dict)) and not v for v in val.values()):
+            return True
+    return False
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+
 def get(function, duration, *args, **kwargs):
     """Cached function call with 3-tier lookup.
 
@@ -177,7 +194,7 @@ def get(function, duration, *args, **kwargs):
 
     # --- Tier 1: RAM (instant) ---
     mem = _mem_get(key)
-    if mem is not None:
+    if mem is not None and not _is_empty_result(mem):
         return mem
 
     # --- Tier 2: SQLite ---
@@ -189,7 +206,7 @@ def get(function, duration, *args, **kwargs):
     if row and is_cache_valid(row['date'], duration):
         try:
             data = ast.literal_eval(row['value'])
-            if data is not None:
+            if data is not None and not _is_empty_result(data):
                 _mem_set(key, row['value'], duration)
                 return data
         except Exception:
@@ -199,7 +216,7 @@ def get(function, duration, *args, **kwargs):
 
     # --- Tier 3: Fresh call ---
     result = function(*args, **kwargs)
-    if result is None:
+    if result is None or _is_empty_result(result):
         return result
     result_repr = repr(result)
     _cache_write(key, result_repr)
@@ -735,3 +752,104 @@ def remove_search(table, value):
         control.notify(
             control.ADDON_NAME,
             f"Search item not found: '{norm}'", time=3000)
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Season Pack & Playback Continuity Caching
+# ═══════════════════════════════════════════════════════════════════════════
+
+def set_season_pack(mal_id, season, source):
+    """Cache the selected season pack source for subsequent episode playback."""
+    if not source or not mal_id:
+        return
+    key = f"season_pack_{mal_id}_{season or 1}"
+    source_copy = dict(source)
+    source_repr = repr(source_copy)
+    duration = 720  # 30 days
+    _cache_write(key, source_repr)
+    _mem_set(key, source_repr, duration)
+
+
+def get_season_pack(mal_id, season=1):
+    """Retrieve the cached season pack source for this show and season."""
+    if not mal_id:
+        return None
+    key = f"season_pack_{mal_id}_{season or 1}"
+    mem = _mem_get(key)
+    if mem is not None:
+        return mem
+    _init_cache_table()
+    with SQL(control.cacheFile) as cur:
+        cur.execute('SELECT value, date FROM cache WHERE key=?', (key,))
+        row = cur.fetchone()
+    if row and is_cache_valid(row['date'], 720):
+        try:
+            data = ast.literal_eval(row['value'])
+            if data:
+                _mem_set(key, row['value'], 720)
+                return data
+        except Exception:
+            pass
+    return None
+
+
+def clear_season_pack(mal_id=None, season=None):
+    """Purge cached season packs from SQLite and memory cache."""
+    _init_cache_table()
+    with SQL(control.cacheFile) as cur:
+        if mal_id and season:
+            key = f"season_pack_{mal_id}_{season}"
+            cur.execute('DELETE FROM cache WHERE key=?', (key,))
+            _mem_del(key)
+        elif mal_id:
+            cur.execute("DELETE FROM cache WHERE key LIKE ?", (f"season_pack_{mal_id}_%",))
+            for s in range(1, 10):
+                _mem_del(f"season_pack_{mal_id}_{s}")
+        else:
+            cur.execute("DELETE FROM cache WHERE key LIKE 'season_pack_%'")
+        cur.connection.commit()
+
+
+def save_last_played_source(mal_id, source):
+    """Save structured metadata of the last played source for smart scoring."""
+    if not source or not mal_id:
+        return
+    key = f"last_played_{mal_id}"
+    payload = {
+        'release_title': source.get('release_title') or source.get('name') or '',
+        'release_group': source_utils.extract_release_group(source.get('release_title') or source.get('name') or ''),
+        'quality': source.get('quality', 0),
+        'provider': source.get('provider', ''),
+        'debrid_provider': source.get('debrid_provider', ''),
+        'channel': source.get('channel', ''),
+        'lang': source.get('lang', 0),
+        'sub': source.get('sub', ''),
+        'type': source.get('type', ''),
+        'package': source_utils.is_season_pack(source),
+        'hash': source.get('hash', '')
+    }
+    _cache_write(key, repr(payload))
+    _mem_set(key, repr(payload), 720)
+
+
+def get_last_played_source(mal_id):
+    """Retrieve the last successfully played source profile for a show."""
+    if not mal_id:
+        return None
+    key = f"last_played_{mal_id}"
+    mem = _mem_get(key)
+    if mem is not None:
+        return mem
+    _init_cache_table()
+    with SQL(control.cacheFile) as cur:
+        cur.execute('SELECT value, date FROM cache WHERE key=?', (key,))
+        row = cur.fetchone()
+    if row and is_cache_valid(row['date'], 720):
+        try:
+            data = ast.literal_eval(row['value'])
+            if data:
+                _mem_set(key, row['value'], 720)
+                return data
+        except Exception:
+            pass
+    return None
+
