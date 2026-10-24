@@ -491,29 +491,6 @@ def filter_sources(provider, torrent_list, mal_id, season=None, episode=None, pa
 
     filtered = []
 
-    show_tokens = set()
-    num_episodes = None
-    show_data = database.get_show(mal_id)
-    if show_data:
-        try:
-            import pickle
-            kodi_meta = pickle.loads(show_data['kodi_meta'])
-            num_episodes = kodi_meta.get('episodes')
-            stop_words = frozenset({'a', 'an', 'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by',
-                                   'season', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 'part', '1st', '2nd',
-                                   '3rd', '4th', '5th', 'final', 'act', 'cour'})
-            for field in ('name', 'ename', 'title_userPreferred', 'query'):
-                val = kodi_meta.get(field, '')
-                if val:
-                    cleaned = cleanTitle(val)
-                    words = [w for w in cleaned.split() if w not in stop_words and len(w) > 1]
-                    show_tokens.update(words)
-                    for i in range(len(words) - 1):
-                        if len(words[i]) >= 3 and len(words[i + 1]) >= 3:
-                            show_tokens.add(words[i] + words[i + 1])
-        except Exception:
-            pass
-
     # Loop over each torrent in the list
     for torrent in torrent_list:
         # Set up the torrent hash as in the original function
@@ -549,19 +526,6 @@ def filter_sources(provider, torrent_list, mal_id, season=None, episode=None, pa
             title = torrent['filename'].lower()
         else:
             title = torrent['name'].lower()
-
-        # Sanity check: verify torrent title has keyword overlap with the requested show
-        if show_tokens:
-            t_clean_for_check = cleanTitle(title)
-            t_tokens = set(t_clean_for_check.split())
-            matches_title = bool(show_tokens & t_tokens)
-            if not matches_title:
-                for stok in show_tokens:
-                    if len(stok) >= 4 and stok in t_clean_for_check:
-                        matches_title = True
-                        break
-            if not matches_title:
-                continue
 
         # Clean the title for extraction
         clean_title = clean_text(title)
@@ -646,16 +610,10 @@ def filter_sources(provider, torrent_list, mal_id, season=None, episode=None, pa
         # Determine if we have any metadata to filter by
         has_info = bool(extracted_episode or extracted_seasons or extracted_parts)
 
-        # For the inverted filter, handle torrents with no info
+        # For the inverted filter, torrents with no info are immediately added.
         if not has_info:
-            if episode is not None:
-                # In episode search, only accept if it is a recognizable season pack/batch or 1-episode show
-                if is_season_pack(torrent) or (num_episodes == 1):
-                    filtered.append(torrent)
-                continue
-            else:
-                filtered.append(torrent)
-                continue
+            filtered.append(torrent)
+            continue
 
         valid = True
 
@@ -866,7 +824,7 @@ def is_season_pack(source):
         return True
     if 'BATCH' in source.get('info', []):
         return True
-    title = source.get('release_title') or source.get('name') or source.get('filename') or ''
+    title = source.get('release_title', '')
     if not title:
         return False
     if extract_episode_range(title) is not None:
@@ -890,7 +848,7 @@ def season_pack_covers_episode(source, episode_num, total_episodes=None):
     except (ValueError, TypeError):
         return False
 
-    title = source.get('release_title') or source.get('name') or source.get('filename') or ''
+    title = source.get('release_title', '')
     r = extract_episode_range(title)
     if r is not None:
         start, end = r

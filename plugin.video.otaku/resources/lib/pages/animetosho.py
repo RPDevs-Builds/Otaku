@@ -65,16 +65,8 @@ class Sources(BrowserBase):
         # Build all search queries upfront
         search_tasks = []
 
-        all_titles, base_titles = self._extract_search_titles(show, season)
-        if not all_titles:
-            all_titles = [show]
-        if not base_titles:
-            base_titles = [show]
-
-        title_subquery = '|'.join(f'({t})' for t in all_titles)
-        query = f'({title_subquery}) ("- {episode_zfill}"|"S{season_zfill}E{episode_zfill}")'
-
-        # Primary episode search (with aids if available)
+        # Primary episode search
+        query = f'{show} "- {episode_zfill}"|"S{season_zfill}E{episode_zfill}"'
         params1 = {
             'q': self._sphinx_clean(query),
             'qx': 1,
@@ -84,16 +76,6 @@ class Sources(BrowserBase):
         if self.anidb_id:
             params1['aids'] = self.anidb_id
         search_tasks.append({'params': params1, 'name': 'primary'})
-
-        # Text search without aids (fallback when anidb_id is unindexed or yields 0)
-        if self.anidb_id:
-            params1_text = {
-                'q': self._sphinx_clean(query),
-                'qx': 1,
-                's': 'downloads',
-                'o': 'desc'
-            }
-            search_tasks.append({'params': params1_text, 'name': 'primary_text'})
 
         # Batch/complete series search for finished shows
         if status in ["FINISHED", "Finished Airing"]:
@@ -118,18 +100,20 @@ class Sources(BrowserBase):
             'q': self._sphinx_clean(query),
             'qx': 1
         }
+        if self.anidb_id:
+            params3['aids'] = self.anidb_id
         search_tasks.append({'params': params3, 'name': 'fallback'})
 
-        # Season variation search (without aids)
-        if (season and int(season) > 1) or 'season' in show.lower():
-            s_num = int(season) if season else 2
-            ordinal = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', 6: '6th', 7: '7th', 8: '8th', 9: '9th'}.get(s_num, f'{s_num}th')
-            base_subquery = '|'.join(f'({t})' for t in base_titles)
-            season_variation_query = f'({base_subquery}) ("{ordinal} Season"|"Season {s_num}"|"S{season_zfill}") ("- {episode_zfill}"|"{episode_zfill}")'
+        # Season variation search
+        if 'season' in show.lower():
+            show_variations = re.split(r'season\s*\d+', show.lower())
+            cleaned_variations = [self._sphinx_clean(var.strip() + ')') for var in show_variations if var.strip()]
             params4 = {
-                'q': self._sphinx_clean(season_variation_query),
+                'q': '|'.join(cleaned_variations),
                 'qx': 1
             }
+            if self.anidb_id:
+                params4['aids'] = self.anidb_id
             search_tasks.append({'params': params4, 'name': 'season_variation'})
 
         # Execute all searches in parallel

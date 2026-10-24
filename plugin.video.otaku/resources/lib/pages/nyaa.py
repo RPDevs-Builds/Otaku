@@ -29,11 +29,11 @@ class Sources(BrowserBase):
         self.sources = episode_sources + show_sources
 
         if not self.sources and ':' in query:
-            parts = [p.strip('() ') for p in query.split('|') if p.strip('() ')]
-            cleaned_parts = [p.split(':')[0].strip() for p in parts if p.split(':')[0].strip()]
-            if cleaned_parts:
-                query2 = '|'.join(f'({p})' for p in cleaned_parts)
-                self.sources = self.get_episode_sources(query2, mal_id, episode, season, part, status)
+            q1, q2 = query.split('|', 2)
+            q1 = q1[1:-1].split(':')[0]
+            q2 = q2[1:-1].split(':')[0]
+            query2 = '({0})|({1})'.format(q1, q2)
+            self.sources = self.get_episode_sources(query2, mal_id, episode, season, part, status)
 
         # remove any duplicate sources
         self.append_cache_uncached_noduplicates()
@@ -46,17 +46,8 @@ class Sources(BrowserBase):
         # Build all search queries
         search_tasks = []
 
-        all_titles, base_titles = self._extract_search_titles(show, season)
-        if not all_titles:
-            all_titles = [show]
-        if not base_titles:
-            base_titles = [show]
-
-        title_subquery = '|'.join(f'({t})' for t in all_titles)
-        ep_subquery = f'"- {episode_zfill}"|"S{season_zfill}E{episode_zfill}"'
-        query1 = f'({title_subquery}) ({ep_subquery})'
-
         # Primary episode search
+        query1 = f'{show} "- {episode_zfill}"|"S{season_zfill}E{episode_zfill}"'
         search_tasks.append({
             'query': query1,
             'params': {'f': '0', 'c': '1_0', 'q': query1.replace(' ', '+'), 's': 'downloads', 'o': 'desc'},
@@ -90,21 +81,24 @@ class Sources(BrowserBase):
             'name': 'fallback'
         })
 
-        # Season variation search
-        if (season and int(season) > 1) or 'season' in show.lower():
-            s_num = int(season) if season else 2
-            ordinal = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', 6: '6th', 7: '7th', 8: '8th', 9: '9th'}.get(s_num, f'{s_num}th')
-            base_subquery = '|'.join(f'({t})' for t in base_titles)
-            season_subquery = f'"{ordinal} Season"|"Season {s_num}"|"S{season_zfill}"'
-            ep_terms = f'"- {episode_zfill}"|"{episode_zfill}"'
-            query4 = f'({base_subquery}) ({season_subquery}) ({ep_terms})'
+        # Season search
+        query4 = show
+        show_lower = show.lower()
+        if 'season' in show_lower:
+            query1_part, query2_part = show.rsplit('|', 2)
+            match_1 = re.match(r'.+?(?=season)', query1_part)
+            if match_1:
+                match_1 = match_1.group(0).strip() + ')'
+            match_2 = re.match(r'.+?(?=season)', query2_part)
+            if match_2:
+                match_2 = match_2.group(0).strip() + ')'
+            query4 = f'{match_1}|{match_2}'
 
-            if query4 and 'None' not in query4:
-                search_tasks.append({
-                    'query': query4,
-                    'params': {'f': '0', 'c': '1_0', 'q': query4.replace(' ', '+')},
-                    'name': 'season_variation'
-                })
+        search_tasks.append({
+            'query': query4,
+            'params': {'f': '0', 'c': '1_0', 'q': query4.replace(' ', '+')},
+            'name': 'additional'
+        })
 
         # Execute all searches in parallel
         control.log(f"Nyaa: Running {len(search_tasks)} searches in parallel for episode {episode_zfill}")

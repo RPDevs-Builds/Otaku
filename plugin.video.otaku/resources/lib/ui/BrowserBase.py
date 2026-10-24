@@ -86,41 +86,6 @@ class BrowserBase(object):
         return text.replace(u'×', ' x ')
 
     @staticmethod
-    def _extract_search_titles(show, season=None):
-        """
-        Extract base titles and variations from show query string.
-        Strips season ordinals ('2nd Season', 'Season 2') so episode searches
-        match releases using 'BaseTitle S02E01' or 'BaseTitle 2nd Season - 01'.
-        """
-        if not show:
-            return [], []
-        raw_parts = [re.sub(r'^[(\s]+|[)\s]+$', '', p).strip() for p in show.split('|') if p.strip()]
-        season_re = re.compile(
-            r'(?i)\s*[:\-_,]?\s*\b(?:(?:\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|final)\s+season|season\s+\d+|s\d+)\b\s*[:\-_,]?\s*'
-        )
-        base_titles = []
-        all_titles = []
-        for part in raw_parts:
-            if not part:
-                continue
-            if part not in all_titles:
-                all_titles.append(part)
-            base = season_re.sub(' ', part).strip(' .-_:')
-            if base:
-                if base not in all_titles:
-                    all_titles.append(base)
-                if base not in base_titles:
-                    base_titles.append(base)
-                # Expand romanization variants of compound Japanese words
-                collapsed = base.replace('Kabushiki Gaisha', 'Kabushikigaisha').replace('Magi Lumiere', 'Magilumiere')
-                if collapsed != base:
-                    if collapsed not in all_titles:
-                        all_titles.append(collapsed)
-                    if collapsed not in base_titles:
-                        base_titles.append(collapsed)
-        return all_titles, base_titles
-
-    @staticmethod
     def clean_embed_title(text):
         return re.sub(r'\W', '', text).lower()
 
